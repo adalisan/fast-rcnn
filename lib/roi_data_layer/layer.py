@@ -113,7 +113,10 @@ class RoIDataLayer(caffe.Layer):
             # fix labels
             ind = len(self._name_to_top_map.keys())
             self._name_to_top_map['labels'] = ind
-            top[ind].reshape(1)
+            if cfg.FLAG_SIGMOID:
+                top[ind].reshape(1, 17)
+            else:
+                top[ind].reshape(1)
 
         if cfg.TRAIN.BBOX_REG:
             self._name_to_top_map['bbox_targets'] = 3

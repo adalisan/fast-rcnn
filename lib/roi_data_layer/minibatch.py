@@ -42,7 +42,7 @@ def get_minibatch(roidb, num_classes):
         rois_blob = [np.zeros((0, 5), dtype=np.float32)] * cfg.TOP_K * 4
     else:
         rois_blob = [np.zeros((0, 5), dtype=np.float32)] * cfg.TOP_K
-    labels_blob = np.zeros((0), dtype=np.float32)
+    labels_blob = np.zeros((0, roidb[0]['label'].shape[0]), dtype=np.float32)
     bbox_targets_blob = np.zeros((0, 4 * num_classes), dtype=np.float32)
     bbox_loss_blob = np.zeros(bbox_targets_blob.shape, dtype=np.float32)
     # all_overlaps = []
@@ -65,10 +65,21 @@ def get_minibatch(roidb, num_classes):
                          = _get_4_side_bbox(roidb[im_i]['boxes'][ind,:], 
                                             w_org[im_i], 
                                             h_org[im_i])
+                elif cfg.FLAG_ENLARGE:
+                    im_rois[ind] = _enlarge_bbox(roidb[im_i]['boxes'][ind, :],
+                                    w_org[im_i],
+                                    h_org[im_i])
+                    im = cv2.imread(roidb[im_i]['image'])
+                    im = im[im_rois[ind][0, 1]:im_rois[ind][0, 3], im_rois[ind][0, 0]:im_rois[ind][0, 2]]
+                    cv2.imwrite('/home/heilaw/pause.jpg', im)
+                    raw_input('pause...')
                 else:
                     # get tight bbox
                     im_rois[ind] = roidb[im_i]['boxes'][ind:ind+1,:]
-            labels  = roidb[im_i]['label'][0:1]
+            if cfg.FLAG_SIGMOID:
+                labels  = roidb[im_i]['label']
+            else:
+                labels = roidb[im_i]['label'][0:1]
             bbox_targets = np.zeros((0, 4 * num_classes), dtype=np.float32)
             bbox_loss = np.zeros(bbox_targets.shape, dtype=np.float32)
 
@@ -80,7 +91,10 @@ def get_minibatch(roidb, num_classes):
             rois_blob[ind] = np.vstack((rois_blob[ind], rois_blob_this_image))
 
         # Add to labels, bbox targets, and bbox loss blobs
-        labels_blob = np.hstack((labels_blob, labels))
+        if cfg.FLAG_SIGMOID:
+            labels_blob = np.vstack((labels_blob, labels.T))
+        else:
+            labels_blob = np.hstack((labels_blob, labels))
         bbox_targets_blob = np.vstack((bbox_targets_blob, bbox_targets))
         bbox_loss_blob = np.vstack((bbox_loss_blob, bbox_loss))
         # all_overlaps = np.hstack((all_overlaps, overlaps))
@@ -159,6 +173,21 @@ def _sample_rois(roidb, fg_rois_per_image, rois_per_image, num_classes):
                                         num_classes)
 
     return labels, overlaps, rois, bbox_targets, bbox_loss_weights
+
+def _enlarge_bbox(bbox, im_width, im_height):
+    w = bbox[2] - bbox[0] + 1;
+    h = bbox[3] - bbox[1] + 1;
+    r = (w + h) / 2
+
+    x_c = np.floor((bbox[2] + bbox[0]) / 2)
+    y_c = np.floor((bbox[3] + bbox[1]) / 2)
+
+    bboxes = np.array([[np.maximum(x_c - w / 2 - r, 1),
+                    np.maximum(y_c - h / 2 - r, 1),
+                    np.minimum(x_c + w / 2 + r, im_width),
+                    np.minimum(y_c + h / 2 + r, im_height)]])
+
+    return bboxes
 
 def _get_4_side_bbox(bbox, im_width, im_height):
     assert(bbox.ndim == 1 and bbox.shape[0] == 4)

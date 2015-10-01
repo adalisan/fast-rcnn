@@ -29,6 +29,7 @@ cfg = __C
 
 # This is for the hico experiment
 __C.FLAG_HICO = False
+__C.FLAG_FOCUS = False
 __C.FLAG_SIGMOID = False
 __C.FLAG_ENLARGE = False
 
@@ -39,6 +40,10 @@ __C.TOP_K = 1
 #    0: feature from the tight box
 #    4: feature from window centered at 4 sides of the box
 __C.FEAT_TYPE = 0
+
+# scale sizes (only for FLAG_FOCUS = True)
+__C.FOCUS_W = 227
+__C.FOCUS_H = 227
 
 #
 # Training options

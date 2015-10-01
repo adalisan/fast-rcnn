@@ -107,7 +107,7 @@ class RoIDataLayer(caffe.Layer):
                 else:
                     # change _name_to_top_map
                     key = 'rois_%d' % (ind+1)
-                    self._name_to_top_map[key] = ind*4+1
+                    self._name_to_top_map[key] = ind+1
                     # reshape
                     top[ind*4+1].reshape(1, 5)
             # fix labels

@@ -163,6 +163,7 @@ class im_horse(datasets.imdb):
         # Expand the dataset; TODO: drop this later
         if self._image_set == 'train2015_single':
             print 'expanding data for single label training ...'
+            roidb = []
             for idx, index in enumerate(self._image_index):
                 for j in xrange(raw_single[idx]['label'].size):
                     roidb.append({'index' : index,

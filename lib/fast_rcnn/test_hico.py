@@ -165,6 +165,38 @@ def _get_blobs(im, rois):
 
     return blobs, im_scale_factors
 
+def _get_blobs_focus(im, rois):
+    """Convert an image into network inputs for focus data layer."""
+    blobs = {}
+
+    # This script is only used for HICO (FLAG_HICO will always be False),
+    # so we don't need to handle blob 'rois'
+    for ind in xrange(cfg.TOP_K):
+        # initialize blob
+        channel_swap = (0, 3, 1, 2)
+        im_blob = np.zeros((1, cfg.FOCUS_H, cfg.FOCUS_W, 3), dtype=np.float32)
+        im_blob = im_blob.transpose(channel_swap)
+
+        # Now we just take the top K detection bbox; should consider
+        # sampling K bbox from a larger pool later
+        bbox = rois[ind,:]
+        im_focus = im[bbox[1]:bbox[3], bbox[0]:bbox[2]]
+        im_focus = im_focus.astype(np.float32, copy=False)
+        # subtract mean
+        im_focus -= cfg.PIXEL_MEANS
+        # scale
+        im_focus = cv2.resize(im_focus, (cfg.FOCUS_W, cfg.FOCUS_H), 
+                              interpolation=cv2.INTER_LINEAR)
+        # convert image to blob
+        channel_swap = (2, 0, 1)
+        im_focus = im_focus.transpose(channel_swap)
+        im_blob[0, :, :, :] = im_focus
+        # save blob
+        key = 'data_%d' % (ind+1)
+        blobs[key] = im_blob
+
+    return blobs
+
 # def _bbox_pred(boxes, box_deltas):
 #     """Transform the set of class-agnostic boxes into class-specific boxes
 #     by applying the predicted offsets (box_deltas)
@@ -226,7 +258,10 @@ def im_detect(net, im, boxes):
         boxes (ndarray): R x (4*K) array of predicted bounding boxes
     """
     print boxes.shape;
-    blobs, unused_im_scale_factors = _get_blobs(im, boxes)
+    if cfg.FLAG_FOCUS:
+        blobs = _get_blobs_focus(im, boxes)
+    else:
+        blobs, unused_im_scale_factors = _get_blobs(im, boxes)
 
     # Disable box dedup for HICO
     # # When mapping from image ROIs to feature map ROIs, there's some aliasing
@@ -242,15 +277,20 @@ def im_detect(net, im, boxes):
     #     boxes = boxes[index, :]
 
     # reshape network inputs and concat input blobs
-    net.blobs['data'].reshape(*(blobs['data'].shape))
-    for ind in xrange(cfg.TOP_K):
-        if cfg.FEAT_TYPE == 4:
-            for s in ['l','t','r','b']:
-                key = 'rois_%d_%s' % (ind+1,s)
-                net.blobs[key].reshape(*(blobs[key].shape))
-        else:
-            key = 'rois_%d' % (ind+1)
+    if cfg.FLAG_FOCUS:
+        for ind in xrange(cfg.TOP_K):
+            key = 'data_%d' % (ind+1)
             net.blobs[key].reshape(*(blobs[key].shape))
+    else:
+        net.blobs['data'].reshape(*(blobs['data'].shape))
+        for ind in xrange(cfg.TOP_K):
+            if cfg.FEAT_TYPE == 4:
+                for s in ['l','t','r','b']:
+                    key = 'rois_%d_%s' % (ind+1,s)
+                    net.blobs[key].reshape(*(blobs[key].shape))
+            else:
+                key = 'rois_%d' % (ind+1)
+                net.blobs[key].reshape(*(blobs[key].shape))
 
     # forward pass    
     blobs_out = net.forward(**(blobs))

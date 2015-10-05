@@ -109,7 +109,7 @@ class RoIDataLayer(caffe.Layer):
                     key = 'rois_%d' % (ind+1)
                     self._name_to_top_map[key] = ind+1
                     # reshape
-                    top[ind*4+1].reshape(1, 5)
+                    top[ind+1].reshape(1, 5)
             # fix labels
             ind = len(self._name_to_top_map.keys())
             self._name_to_top_map['labels'] = ind

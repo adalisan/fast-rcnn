@@ -19,8 +19,12 @@ import os.path as osp
 
 class im_horse(datasets.imdb):
     def __init__(self, image_set, root_dir):
-        if (image_set == 'train2015_single' or image_set =='train2015_sigmoid'):
+        if (image_set == 'train2015_single' or 
+            image_set == 'train2015_sigmoid' or
+            image_set == 'train2015_person'):
             image_set_org = 'train2015'
+        elif image_set == 'test2015_person':
+            image_set_org = 'test2015'
         else:
             image_set_org = image_set
         datasets.imdb.__init__(self, 'im_horse_' + image_set, True)
@@ -147,13 +151,17 @@ class im_horse(datasets.imdb):
         assert(self._image_set == 'train2015_single' or
                self._image_set == 'train2015_sigmoid' or
                self._image_set == 'train2015' or 
-               self._image_set == 'test2015')
+               self._image_set == 'test2015' or 
+               self._image_set == 'train2015_person' or
+               self._image_set == 'test2015_person')
         if (self._image_set == 'train2015_single' or
             self._image_set == 'train2015' or
-            self._image_set == 'train2015_sigmoid'):
+            self._image_set == 'train2015_sigmoid' or
+            self._image_set == 'train2015_person'):
             anno = sio.loadmat(self._anno_file)['anno_train']
             lsim = sio.loadmat(self._anno_file)['list_train']
-        if self._image_set == 'test2015':
+        if (self._image_set == 'test2015' or 
+            self._image_set == 'test2015_person'):
             anno = sio.loadmat(self._anno_file)['anno_test']
             lsim = sio.loadmat(self._anno_file)['list_test']
         
@@ -173,7 +181,9 @@ class im_horse(datasets.imdb):
             self.update_image_set_index(roidb)
         if (self._image_set == 'train2015' or 
             self._image_set == 'test2015' or
-            self._image_set == 'train2015_sigmoid'):
+            self._image_set == 'train2015_sigmoid' or
+            self._image_set == 'train2015_person' or
+            self._image_set == 'test2015_person'):
             roidb = raw_single
             # for rois in roidb:
             #     rois.pop("index", None)
@@ -183,7 +193,14 @@ class im_horse(datasets.imdb):
 
     def _load_detection(self, index, anno, lsim):
         # ------- params to be changed later ----------------------------------
-        nid = 18  # horse
+        if (self._image_set == 'train2015_single' or
+            self._image_set == 'train2015' or
+            self._image_set == 'train2015_sigmoid' or
+            self._image_set == 'test2015'):
+            nid = 18  # horse
+        if (self._image_set == 'train2015_person' or
+            self._image_set == 'test2015_person'):
+            nid = 2  # person
         # ---------------------------------------------------------------------
          
         # Load detection file
@@ -205,7 +222,8 @@ class im_horse(datasets.imdb):
         assert(len(ind) == 1)
         
         # Read labels
-        if self._image_set == 'train2015_sigmoid':
+        if (self._image_set == 'train2015_sigmoid' or
+            self._image_set == 'train2015_person'):
             labels = anno[:, ind]
             labels[labels != 1] = 0
         else:

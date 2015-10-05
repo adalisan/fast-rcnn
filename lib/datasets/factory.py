@@ -40,8 +40,12 @@ for top_k in np.arange(1000, 11000, 1000):
             __sets[name] = (lambda split=split, year=year, top_k=top_k:
                     _selective_search_IJCV_top_k(split, year, top_k))
 
-# Set up im_horse using selective search "fast" mode
-hico_set = ['train2015_single', 'train2015', 'test2015', 'train2015_sigmoid']
+# First row: Set up im_horse using CaffeNet object detector (horse)
+# Second row: Set up im_horse using CaffeNet object detector (person); both 
+# options will use sigmoid by default
+hico_set = ['train2015_single', 'train2015', 'test2015', 'train2015_sigmoid',
+            'train2015_person', 'test2015_person']
+hico_set.append([])
 for image_set in hico_set:
     name = 'im_horse_{}'.format(image_set)
     __sets[name] = (lambda image_set=image_set:

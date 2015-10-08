@@ -183,14 +183,11 @@ def _get_blobs_focus(im, rois):
     """Convert an image into network inputs for focus data layer."""
     blobs = {}
 
-    channel_swap = (0, 3, 1, 2)
-    im_blob = np.zeros((1, cfg.FOCUS_H, cfg.FOCUS_W, 3), dtype=np.float32)
-    im_blob = im_blob.transpose(channel_swap)
     # This script is only used for HICO (FLAG_HICO will always be False),
     # so we don't need to handle blob 'rois'
-    for ind in xrange(cfg.TOP_K):
+    for ind in xrange(cfg.TOP_K):  
         # initialize blob
-        
+        im_blob = np.zeros((1, 3, cfg.FOCUS_H, cfg.FOCUS_W), dtype=np.float32)
         # Now we just take the top K detection bbox; should consider
         # sampling K bbox from a larger pool later
         im_blob[0, :, :, :] = _get_one_blob(im, rois[ind,:])
@@ -204,14 +201,13 @@ def _get_blobs_focus_ho(im, rois_o, rois_h):
     """Convert an image into network inputs for focus data layer."""
     blobs = {}
 
-    channel_swap = (0, 3, 1, 2)
-    im_blob = np.zeros((1, cfg.FOCUS_H, cfg.FOCUS_W, 3), dtype=np.float32)
-    im_blob = im_blob.transpose(channel_swap)
-    for ind in xrange(cfg.OBJ_K):    
+    for ind in xrange(cfg.OBJ_K):
+        im_blob = np.zeros((1, 3, cfg.FOCUS_H, cfg.FOCUS_W), dtype=np.float32)
         im_blob[0, :, :, :] = _get_one_blob(im, rois_o[ind,:])
         key = 'data_o%d' % (ind+1)
         blobs[key] = im_blob
     for ind in xrange(cfg.HMN_K):
+        im_blob = np.zeros((1, 3, cfg.FOCUS_H, cfg.FOCUS_W), dtype=np.float32)
         im_blob[0, :, :, :] = _get_one_blob(im, rois_h[ind,:])
         key = 'data_h%d' % (ind+1)
         blobs[key] = im_blob
@@ -344,7 +340,7 @@ def im_detect(net, im, roidb):
         if cfg.FLAG_HO:
             feats = net.blobs['score_max'].data
         else:
-            feats = net.blobs['cls_score']
+            feats = net.blobs['cls_score'].data
     else:
         if cfg.FEAT_TYPE == 4 and not cfg.FLAG_SIGMOID:
             feats = net.blobs['fc7_concat'].data

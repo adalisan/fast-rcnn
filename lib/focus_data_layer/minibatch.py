@@ -12,6 +12,7 @@ import numpy as np
 import cv2
 from fast_rcnn.config import cfg
 from utils.blob import prep_im_for_blob, im_list_to_blob
+# import os
 
 def get_minibatch(roidb, num_classes):
     """Given a roidb, construct a minibatch sampled from it."""
@@ -50,30 +51,48 @@ def get_minibatch(roidb, num_classes):
     # all_overlaps = []
 
     # Initalize im_blobs
-    channel_swap = (0, 3, 1, 2)
-    im_blob = np.zeros((num_images, cfg.FOCUS_H, cfg.FOCUS_W, 3), 
-                       dtype=np.float32)
-    im_blob = im_blob.transpose(channel_swap)
+    # channel_swap = (0, 3, 1, 2)
+    # im_blob = np.zeros((num_images, cfg.FOCUS_H, cfg.FOCUS_W, 3), 
+    #                    dtype=np.float32)
+    # im_blob = im_blob.transpose(channel_swap)
     if cfg.FLAG_HO:
-        im_blobs_o = [im_blob] * cfg.OBJ_K
-        im_blobs_h = [im_blob] * cfg.HMN_K
+        # im_blobs_o = [im_blob.copy()] * cfg.OBJ_K
+        # im_blobs_h = [im_blob.copy()] * cfg.HMN_K
+        im_blobs_o = [np.zeros((num_images, 3, cfg.FOCUS_H, cfg.FOCUS_W), 
+                               dtype=np.float32) 
+                      for _ in xrange(cfg.OBJ_K)]
+        im_blobs_h = [np.zeros((num_images, 3, cfg.FOCUS_H, cfg.FOCUS_W), 
+                               dtype=np.float32) 
+                      for _ in xrange(cfg.HMN_K)]
     else:
-        im_blobs = [im_blob] * cfg.TOP_K
+        # im_blobs = [im_blob.copy()] * cfg.TOP_K
+        im_blobs = [np.zeros((num_images, 3, cfg.FOCUS_H, cfg.FOCUS_W), 
+                             dtype=np.float32) 
+                    for _ in xrange(cfg.TOP_K)]
     
     for im_i in xrange(num_images):
         # labels, overlaps, im_rois, bbox_targets, bbox_loss \
         #     = _sample_rois(roidb[im_i], fg_rois_per_image, rois_per_image,
         #                    num_classes)
         im = cv2.imread(roidb[im_i]['image'])
+        # print roidb[im_i]['image']
         if roidb[im_i]['flipped']:
             im = im[:, ::-1, :]
         if cfg.FLAG_HO:
             for ind in xrange(cfg.OBJ_K):
                 im_focus = _get_one_blob(im, roidb[im_i]['boxes_o'][ind,:])
+                # im_focus, save_focus = _get_one_blob(im, roidb[im_i]['boxes_o'][ind,:])
                 im_blobs_o[ind][im_i, :, :, :] = im_focus
+                # savefile = 'test_i%d_o%d.jpg' % (im_i, ind)
+                # if not os.path.isfile(savefile):
+                #     cv2.imwrite(savefile,save_focus)
             for ind in xrange(cfg.HMN_K):
                 im_focus = _get_one_blob(im, roidb[im_i]['boxes_h'][ind,:])
+                # im_focus, save_focus = _get_one_blob(im, roidb[im_i]['boxes_h'][ind,:])
                 im_blobs_h[ind][im_i, :, :, :] = im_focus
+                # savefile = 'test_i%d_h%d.jpg' % (im_i, ind)
+                # if not os.path.isfile(savefile):
+                #     cv2.imwrite(savefile,save_focus)
         else:
             for ind in xrange(cfg.TOP_K):
                 # Now we just take the top K detection bbox; should consider
@@ -123,6 +142,7 @@ def get_minibatch(roidb, num_classes):
 def _get_one_blob(im, bbox):
     # crop image
     im_focus = im[bbox[1]:bbox[3], bbox[0]:bbox[2]]
+    # save_im  = im_focus
     im_focus = im_focus.astype(np.float32, copy=False)
     # subtract mean
     im_focus -= cfg.PIXEL_MEANS
@@ -133,6 +153,7 @@ def _get_one_blob(im, bbox):
     channel_swap = (2, 0, 1)
     im_focus = im_focus.transpose(channel_swap)
     return im_focus
+    # return im_focus, save_im
 
 # def _sample_rois(roidb, fg_rois_per_image, rois_per_image, num_classes):
 #     """Generate a random sample of RoIs comprising foreground and background

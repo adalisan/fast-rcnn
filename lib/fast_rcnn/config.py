@@ -32,9 +32,13 @@ __C.FLAG_HICO = False
 __C.FLAG_FOCUS = False
 __C.FLAG_SIGMOID = False
 __C.FLAG_ENLARGE = False
+__C.FLAG_HO = False
 
 # top K detection boxes (only for FLAG_HICO = True)
-__C.TOP_K = 1
+__C.TOP_K = 1  # for one object input (__C.FLAG_HO == False)
+
+__C.OBJ_K = 1  # for two object input (__C.FLAG_HO == True)
+__C.HMN_K = 1  # for two object input (__C.FLAG_HO == True)
 
 # region feature type (only for FLAG_HICO = True)
 #    0: feature from the tight box

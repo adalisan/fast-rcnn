@@ -102,30 +102,52 @@ class imdb(object):
         num_images = self.num_images
         widths = [PIL.Image.open(self.image_path_at(i)).size[0]
                   for i in xrange(num_images)]
+        # assertions
+        assert(len(self.roidb) > 0)
+        if self._flag_hico:
+            c1 = 'boxes' in self.roidb[0]
+            c2 = ('boxes_h' in self.roidb[0]) and ('boxes_o' in self.roidb[0])
+            assert(c1 ^ c2)
+       
         for i in xrange(num_images):
-            boxes = self.roidb[i]['boxes'].copy()
-            oldx1 = boxes[:, 0].copy()
-            oldx2 = boxes[:, 2].copy()
-            boxes[:, 0] = widths[i] - oldx2 - 1
-            boxes[:, 2] = widths[i] - oldx1 - 1
-            assert (boxes[:, 2] >= boxes[:, 0]).all()
             if self._flag_hico:
                 if 'index' in self.roidb[i]:
-                    entry = {'index' : self.roidb[i]['index'],  # TODO: drop this later
-                             'boxes' : boxes,
+                    # TODO: drop this later
+                    entry = {'index' : self.roidb[i]['index'],
                              'label' : self.roidb[i]['label'],
                              'flipped' : True}
                 else:
-                    entry = {'boxes' : boxes,
-                             'label' : self.roidb[i]['label'],
+                    entry = {'label' : self.roidb[i]['label'],
                              'flipped' : True}
+                if c1:
+                    boxes = self.roidb[i]['boxes'].copy()
+                    boxes = self.flip_boxes(boxes, widths[i])
+                    entry['boxes'] = boxes
+                if c2:
+                    boxes_o = self.roidb[i]['boxes_o'].copy()
+                    boxes_h = self.roidb[i]['boxes_h'].copy()
+                    boxes_o = self.flip_boxes(boxes_o, widths[i])
+                    boxes_h = self.flip_boxes(boxes_h, widths[i])
+                    entry['boxes_o'] = boxes_o
+                    entry['boxes_h'] = boxes_h
             else:
+                boxes = self.roidb[i]['boxes'].copy()
+                boxes = self.flip_boxes(boxes, widths[i])
                 entry = {'boxes' : boxes,
                          'gt_overlaps' : self.roidb[i]['gt_overlaps'],
                          'gt_classes' : self.roidb[i]['gt_classes'],
                          'flipped' : True}
             self.roidb.append(entry)
         self._image_index = self._image_index * 2
+
+    # flip boxes
+    def flip_boxes(self, boxes, width):
+        oldx1 = boxes[:, 0].copy()
+        oldx2 = boxes[:, 2].copy()
+        boxes[:, 0] = width - oldx2 - 1
+        boxes[:, 2] = width - oldx1 - 1
+        assert (boxes[:, 2] >= boxes[:, 0]).all()
+        return boxes
 
     def evaluate_recall(self, candidate_boxes, ar_thresh=0.5):
         # Record max overlap value for each gt box

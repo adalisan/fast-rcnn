@@ -16,14 +16,17 @@ import cPickle
 import subprocess
 
 import os.path as osp
+# import cv2
 
 class im_horse(datasets.imdb):
     def __init__(self, image_set, root_dir):
         if (image_set == 'train2015_single' or 
             image_set == 'train2015_sigmoid' or
-            image_set == 'train2015_person'):
+            image_set == 'train2015_person' or
+            image_set == 'train2015_ho'):
             image_set_org = 'train2015'
-        elif image_set == 'test2015_person':
+        elif (image_set == 'test2015_person' or
+              image_set == 'test2015_ho'):
             image_set_org = 'test2015'
         else:
             image_set_org = image_set
@@ -153,15 +156,19 @@ class im_horse(datasets.imdb):
                self._image_set == 'train2015' or 
                self._image_set == 'test2015' or 
                self._image_set == 'train2015_person' or
-               self._image_set == 'test2015_person')
+               self._image_set == 'test2015_person' or
+               self._image_set == 'train2015_ho' or
+               self._image_set == 'test2015_ho')
         if (self._image_set == 'train2015_single' or
             self._image_set == 'train2015' or
             self._image_set == 'train2015_sigmoid' or
-            self._image_set == 'train2015_person'):
+            self._image_set == 'train2015_person' or
+            self._image_set == 'train2015_ho'):
             anno = sio.loadmat(self._anno_file)['anno_train']
             lsim = sio.loadmat(self._anno_file)['list_train']
         if (self._image_set == 'test2015' or 
-            self._image_set == 'test2015_person'):
+            self._image_set == 'test2015_person' or
+            self._image_set == 'test2015_ho'):
             anno = sio.loadmat(self._anno_file)['anno_test']
             lsim = sio.loadmat(self._anno_file)['list_test']
         
@@ -183,7 +190,9 @@ class im_horse(datasets.imdb):
             self._image_set == 'test2015' or
             self._image_set == 'train2015_sigmoid' or
             self._image_set == 'train2015_person' or
-            self._image_set == 'test2015_person'):
+            self._image_set == 'test2015_person' or
+            self._image_set == 'train2015_ho' or
+            self._image_set == 'test2015_ho'):
             roidb = raw_single
             # for rois in roidb:
             #     rois.pop("index", None)
@@ -197,39 +206,73 @@ class im_horse(datasets.imdb):
             self._image_set == 'train2015' or
             self._image_set == 'train2015_sigmoid' or
             self._image_set == 'test2015'):
-            nid = 18  # horse
+            obj_id = [18]  # horse
         if (self._image_set == 'train2015_person' or
             self._image_set == 'test2015_person'):
-            nid = 2  # person
+            obj_id = [1]  # person
+        if (self._image_set == 'train2015_ho' or
+            self._image_set == 'test2015_ho'):
+            obj_id = [18,1]  # horse, person
         # ---------------------------------------------------------------------
          
         # Load detection file
-        print index
+        print index,
         filename = os.path.join(self._det_path, os.path.splitext(index)[0] + '.mat')
         #print 'Loading: {}'.format(filename)
         assert os.path.exists(filename), \
                'Detection file not found at: {}'.format(filename)
         res = sio.loadmat(filename)['res']
-        dets = res['dets'][0,0][0,nid]
-        # NMS: 'keep' will also sort the dets by detection scores
-        keep = np.squeeze(res['keep'][0,0][0,nid])
-        dets = dets[keep,:]
-        # Keep all the detection boxes now and filter later in data fetching
-        boxes = dets[:,0:4]
-        boxes = np.around(boxes).astype('uint16')        
+            
         # Get image index
         ind = [idx for idx, im in enumerate(lsim) if str(im[0][0]) == index]
         assert(len(ind) == 1)
         
         # Read labels
         if (self._image_set == 'train2015_sigmoid' or
-            self._image_set == 'train2015_person'):
+            self._image_set == 'train2015_person' or
+            self._image_set == 'train2015_ho'):
             labels = anno[:, ind]
             labels[labels != 1] = 0
         else:
             labels = np.where(anno[:,ind] == 1)[0]
-        
-        return {'boxes' : boxes, 'label' : labels, 'flipped' : False}
+
+        # Read boxes
+        assert(len(obj_id) == 1 or len(obj_id) == 2)        
+        if len(obj_id) == 1:
+            boxes = self._get_boxes_one_object(res, obj_id[0])
+            print boxes.shape
+            return {'boxes' : boxes, 'label' : labels, 'flipped' : False}
+        if len(obj_id) == 2:
+            boxes_o = self._get_boxes_one_object(res, obj_id[0])
+            boxes_h = self._get_boxes_one_object(res, obj_id[1])
+            print boxes_o.shape, boxes_h.shape
+            # im = cv2.imread(self.image_path_from_index(index))
+            # for ind in xrange(10):
+            #     savefile = 'test_o%d.jpg' % ind
+            #     if not os.path.isfile(savefile):
+            #         bbox = boxes_o[ind,:]
+            #         im_focus = im[bbox[1]:bbox[3], bbox[0]:bbox[2]]
+            #         cv2.imwrite(savefile,im_focus)
+            #     savefile = 'test_h%d.jpg' % ind
+            #     if not os.path.isfile(savefile):
+            #         bbox = boxes_h[ind,:]
+            #         im_focus = im[bbox[1]:bbox[3], bbox[0]:bbox[2]]
+            #         cv2.imwrite(savefile,im_focus)
+            return {'boxes_o' : boxes_o, 'boxes_h' : boxes_h, 
+                    'label' : labels, 'flipped' : False}
+
+    # get boxes for object object with nms
+    def _get_boxes_one_object(self, res, oid):
+        # get boxes for the first object
+        dets = res['dets'][0,0][0,oid]
+        # NMS: 'keep' will also sort the dets by detection scores
+        keep = np.squeeze(res['keep'][0,0][0,oid])
+        dets = dets[keep,:]
+        # Keep all the detection boxes now and filter later in data fetching
+        boxes = dets[:,0:4]
+        boxes = np.around(boxes).astype('uint16')
+        # return
+        return boxes
 
     # TODO: dropped this later
     def update_image_set_index(self, roidb):

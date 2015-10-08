@@ -30,6 +30,13 @@ def get_minibatch(roidb, num_classes):
     assert(cfg.FLAG_FOCUS)
     assert(cfg.FLAG_SIGMOID)
     assert(not cfg.TRAIN.BBOX_REG)
+    assert(num_images > 0)
+    if cfg.FLAG_HO:
+        assert('boxes' not in roidb[0])
+        assert(('boxes_o' in roidb[0]) and ('boxes_h' in roidb[0]))
+    else:
+        assert('boxes' in roidb[0])
+        assert(('boxes_o' not in roidb[0]) and ('boxes_h' not in roidb[0]))
 
     # # Get the input image blob, formatted for caffe
     # im_blob, im_scales = _get_image_blob(roidb, random_scale_inds)
@@ -44,9 +51,14 @@ def get_minibatch(roidb, num_classes):
 
     # Initalize im_blobs
     channel_swap = (0, 3, 1, 2)
-    im_blob = np.zeros((num_images, cfg.FOCUS_H, cfg.FOCUS_W, 3), dtype=np.float32)
+    im_blob = np.zeros((num_images, cfg.FOCUS_H, cfg.FOCUS_W, 3), 
+                       dtype=np.float32)
     im_blob = im_blob.transpose(channel_swap)
-    im_blobs = [im_blob] * cfg.TOP_K
+    if cfg.FLAG_HO:
+        im_blobs_o = [im_blob] * cfg.OBJ_K
+        im_blobs_h = [im_blob] * cfg.HMN_K
+    else:
+        im_blobs = [im_blob] * cfg.TOP_K
     
     for im_i in xrange(num_images):
         # labels, overlaps, im_rois, bbox_targets, bbox_loss \
@@ -55,21 +67,19 @@ def get_minibatch(roidb, num_classes):
         im = cv2.imread(roidb[im_i]['image'])
         if roidb[im_i]['flipped']:
             im = im[:, ::-1, :]
-        for ind in xrange(cfg.TOP_K):
-            # Now we just take the top K detection bbox; should consider
-            # sampling K bbox from a larger pool later
-            bbox = roidb[im_i]['boxes'][ind,:]
-            im_focus = im[bbox[1]:bbox[3], bbox[0]:bbox[2]]
-            im_focus = im_focus.astype(np.float32, copy=False)
-            # subtract mean
-            im_focus -= cfg.PIXEL_MEANS
-            # scale
-            im_focus = cv2.resize(im_focus, (cfg.FOCUS_W, cfg.FOCUS_H), 
-                                  interpolation=cv2.INTER_LINEAR)
-            # convert image to blob
-            channel_swap = (2, 0, 1)
-            im_focus = im_focus.transpose(channel_swap)
-            im_blobs[ind][im_i, :, :, :] = im_focus
+        if cfg.FLAG_HO:
+            for ind in xrange(cfg.OBJ_K):
+                im_focus = _get_one_blob(im, roidb[im_i]['boxes_o'][ind,:])
+                im_blobs_o[ind][im_i, :, :, :] = im_focus
+            for ind in xrange(cfg.HMN_K):
+                im_focus = _get_one_blob(im, roidb[im_i]['boxes_h'][ind,:])
+                im_blobs_h[ind][im_i, :, :, :] = im_focus
+        else:
+            for ind in xrange(cfg.TOP_K):
+                # Now we just take the top K detection bbox; should consider
+                # sampling K bbox from a larger pool later
+                im_focus = _get_one_blob(im, roidb[im_i]['boxes'][ind,:])
+                im_blobs[ind][im_i, :, :, :] = im_focus
 
         labels = roidb[im_i]['label']
 
@@ -92,15 +102,37 @@ def get_minibatch(roidb, num_classes):
     #          'rois': rois_blob,
     #          'labels': labels_blob}
     blobs = {'labels': labels_blob}
-    for ind in xrange(0,cfg.TOP_K):
-        key = 'data_%d' % (ind+1)
-        blobs[key] = im_blobs[ind]
+    if cfg.FLAG_HO:
+        for ind in xrange(0,cfg.OBJ_K):
+            key = 'data_o%d' % (ind+1)
+            blobs[key] = im_blobs_o[ind]
+        for ind in xrange(0,cfg.HMN_K):
+            key = 'data_h%d' % (ind+1)
+            blobs[key] = im_blobs_h[ind]
+    else:
+        for ind in xrange(0,cfg.TOP_K):
+            key = 'data_%d' % (ind+1)
+            blobs[key] = im_blobs[ind]
 
     # if cfg.TRAIN.BBOX_REG:
     #     blobs['bbox_targets'] = bbox_targets_blob
     #     blobs['bbox_loss_weights'] = bbox_loss_blob
 
     return blobs
+
+def _get_one_blob(im, bbox):
+    # crop image
+    im_focus = im[bbox[1]:bbox[3], bbox[0]:bbox[2]]
+    im_focus = im_focus.astype(np.float32, copy=False)
+    # subtract mean
+    im_focus -= cfg.PIXEL_MEANS
+    # scale
+    im_focus = cv2.resize(im_focus, (cfg.FOCUS_W, cfg.FOCUS_H), 
+                          interpolation=cv2.INTER_LINEAR)
+    # convert image to blob
+    channel_swap = (2, 0, 1)
+    im_focus = im_focus.transpose(channel_swap)
+    return im_focus
 
 # def _sample_rois(roidb, fg_rois_per_image, rois_per_image, num_classes):
 #     """Generate a random sample of RoIs comprising foreground and background

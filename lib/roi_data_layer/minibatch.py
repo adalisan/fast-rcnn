@@ -30,6 +30,11 @@ def get_minibatch(roidb, num_classes):
         assert(cfg.TRAIN.FG_FRACTION == 1)
         assert(cfg.TRAIN.BATCH_SIZE == num_images)
         assert(cfg.TRAIN.BATCH_SIZE == cfg.TRAIN.BATCH_SIZE)
+        # assert only one set of boxes (either object or person)
+        assert(not cfg.FLAG_HO)
+        assert(num_images > 0)
+        assert('boxes' in roidb[0])
+        assert(('boxes_o' not in roidb[0]) and ('boxes_h' not in roidb[0]))
 
     # Get the input image blob, formatted for caffe
     #   w_org/h_org: image width/height in the original scale; for the 4-side

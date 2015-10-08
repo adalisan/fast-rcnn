@@ -165,34 +165,55 @@ def _get_blobs(im, rois):
 
     return blobs, im_scale_factors
 
+def _get_one_blob(im, bbox):
+    # crop image
+    im_focus = im[bbox[1]:bbox[3], bbox[0]:bbox[2]]
+    im_focus = im_focus.astype(np.float32, copy=False)
+    # subtract mean
+    im_focus -= cfg.PIXEL_MEANS
+    # scale
+    im_focus = cv2.resize(im_focus, (cfg.FOCUS_W, cfg.FOCUS_H), 
+                          interpolation=cv2.INTER_LINEAR)
+    # convert image to blob
+    channel_swap = (2, 0, 1)
+    im_focus = im_focus.transpose(channel_swap)
+    return im_focus
+
 def _get_blobs_focus(im, rois):
     """Convert an image into network inputs for focus data layer."""
     blobs = {}
 
+    channel_swap = (0, 3, 1, 2)
+    im_blob = np.zeros((1, cfg.FOCUS_H, cfg.FOCUS_W, 3), dtype=np.float32)
+    im_blob = im_blob.transpose(channel_swap)
     # This script is only used for HICO (FLAG_HICO will always be False),
     # so we don't need to handle blob 'rois'
     for ind in xrange(cfg.TOP_K):
         # initialize blob
-        channel_swap = (0, 3, 1, 2)
-        im_blob = np.zeros((1, cfg.FOCUS_H, cfg.FOCUS_W, 3), dtype=np.float32)
-        im_blob = im_blob.transpose(channel_swap)
-
+        
         # Now we just take the top K detection bbox; should consider
         # sampling K bbox from a larger pool later
-        bbox = rois[ind,:]
-        im_focus = im[bbox[1]:bbox[3], bbox[0]:bbox[2]]
-        im_focus = im_focus.astype(np.float32, copy=False)
-        # subtract mean
-        im_focus -= cfg.PIXEL_MEANS
-        # scale
-        im_focus = cv2.resize(im_focus, (cfg.FOCUS_W, cfg.FOCUS_H), 
-                              interpolation=cv2.INTER_LINEAR)
-        # convert image to blob
-        channel_swap = (2, 0, 1)
-        im_focus = im_focus.transpose(channel_swap)
-        im_blob[0, :, :, :] = im_focus
+        im_blob[0, :, :, :] = _get_one_blob(im, rois[ind,:])
         # save blob
         key = 'data_%d' % (ind+1)
+        blobs[key] = im_blob
+
+    return blobs
+
+def _get_blobs_focus_ho(im, rois_o, rois_h):
+    """Convert an image into network inputs for focus data layer."""
+    blobs = {}
+
+    channel_swap = (0, 3, 1, 2)
+    im_blob = np.zeros((1, cfg.FOCUS_H, cfg.FOCUS_W, 3), dtype=np.float32)
+    im_blob = im_blob.transpose(channel_swap)
+    for ind in xrange(cfg.OBJ_K):    
+        im_blob[0, :, :, :] = _get_one_blob(im, rois_o[ind,:])
+        key = 'data_o%d' % (ind+1)
+        blobs[key] = im_blob
+    for ind in xrange(cfg.HMN_K):
+        im_blob[0, :, :, :] = _get_one_blob(im, rois_h[ind,:])
+        key = 'data_h%d' % (ind+1)
         blobs[key] = im_blob
 
     return blobs
@@ -244,7 +265,7 @@ def _get_blobs_focus(im, rois):
 #     boxes[:, 3::4] = np.minimum(boxes[:, 3::4], im_shape[0] - 1)
 #     return boxes
 
-def im_detect(net, im, boxes):
+def im_detect(net, im, roidb):
     """Detect object classes in an image given object proposals.
 
     Arguments:
@@ -257,10 +278,16 @@ def im_detect(net, im, boxes):
             background as object category 0)
         boxes (ndarray): R x (4*K) array of predicted bounding boxes
     """
-    print boxes.shape;
     if cfg.FLAG_FOCUS:
-        blobs = _get_blobs_focus(im, boxes)
+        if cfg.FLAG_HO:
+            boxes_o = roidb['boxes_o']
+            boxes_h = roidb['boxes_h']
+            blobs = _get_blobs_focus_ho(im, boxes_o, boxes_h)
+        else:
+            boxes = roidb['boxes']
+            blobs = _get_blobs_focus(im, boxes)
     else:
+        boxes = roidb['boxes']
         blobs, unused_im_scale_factors = _get_blobs(im, boxes)
 
     # Disable box dedup for HICO
@@ -278,9 +305,17 @@ def im_detect(net, im, boxes):
 
     # reshape network inputs and concat input blobs
     if cfg.FLAG_FOCUS:
-        for ind in xrange(cfg.TOP_K):
-            key = 'data_%d' % (ind+1)
-            net.blobs[key].reshape(*(blobs[key].shape))
+        if cfg.FLAG_HO:
+            for ind in xrange(cfg.OBJ_K):
+                key = 'data_o%d' % (ind+1)
+                net.blobs[key].reshape(*(blobs[key].shape))
+            for ind in xrange(cfg.HMN_K):
+                key = 'data_h%d' % (ind+1)
+                net.blobs[key].reshape(*(blobs[key].shape))
+        else:
+            for ind in xrange(cfg.TOP_K):
+                key = 'data_%d' % (ind+1)
+                net.blobs[key].reshape(*(blobs[key].shape))
     else:
         net.blobs['data'].reshape(*(blobs['data'].shape))
         for ind in xrange(cfg.TOP_K):
@@ -305,12 +340,18 @@ def im_detect(net, im, boxes):
     scores = []
     
     # save feature
-    if cfg.FEAT_TYPE == 4 and not cfg.FLAG_SIGMOID:
-        feats = net.blobs['fc7_concat'].data
-    elif cfg.FLAG_SIGMOID:
-        feats = net.blobs['cls_score'].data
+    if cfg.FLAG_FOCUS:
+        if cfg.FLAG_HO:
+            feats = net.blobs['score_max'].data
+        else:
+            feats = net.blobs['cls_score']
     else:
-        feats = net.blobs['fc7'].data
+        if cfg.FEAT_TYPE == 4 and not cfg.FLAG_SIGMOID:
+            feats = net.blobs['fc7_concat'].data
+        elif cfg.FLAG_SIGMOID:
+            feats = net.blobs['cls_score'].data
+        else:
+            feats = net.blobs['fc7'].data
 
     # assert(cfg.TEST.BBOX_REG == False)
     # if cfg.TEST.BBOX_REG:
@@ -411,7 +452,7 @@ def test_net_hico(net, imdb, feat_root):
 
         im = cv2.imread(imdb.image_path_at(i))
         _t['im_detect'].tic()
-        scores, boxes, feats = im_detect(net, im, roidb[i]['boxes'])
+        scores, boxes, feats = im_detect(net, im, roidb[i])
         _t['im_detect'].toc()
 
         _t['misc'].tic()

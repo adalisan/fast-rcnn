@@ -338,9 +338,9 @@ def im_detect(net, im, roidb):
     # save feature
     if cfg.FLAG_FOCUS:
         if cfg.FLAG_HO:
-            feats = net.blobs['score_max'].data
+            feats = net.blobs['score'].data
         else:
-            feats = net.blobs['cls_score'].data
+            feats = net.blobs['score'].data
     else:
         if cfg.FEAT_TYPE == 4 and not cfg.FLAG_SIGMOID:
             feats = net.blobs['fc7_concat'].data

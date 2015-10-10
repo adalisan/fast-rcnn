@@ -179,7 +179,7 @@ def _get_one_blob(im, bbox):
     im_focus = im_focus.transpose(channel_swap)
     return im_focus
 
-def _get_blobs_focus(im, rois):
+def _get_blobs_focus(im, roidb):
     """Convert an image into network inputs for focus data layer."""
     blobs = {}
 
@@ -190,7 +190,18 @@ def _get_blobs_focus(im, rois):
         im_blob = np.zeros((1, 3, cfg.FOCUS_H, cfg.FOCUS_W), dtype=np.float32)
         # Now we just take the top K detection bbox; should consider
         # sampling K bbox from a larger pool later
-        im_blob[0, :, :, :] = _get_one_blob(im, rois[ind,:])
+        if cfg.FLAG_TOP_THRESH:
+            # we threshold the boxes by scores
+            keep = np.where(roidb['scores'] >= cfg.TOP_THRESH)
+            if keep[0].size == 0:
+                xid = 1
+            else:
+                xid = np.amax(keep[0]) + 1
+            ind_th = ind % xid
+            print ind_th,
+            im_blob[0, :, :, :] = _get_one_blob(im, roidb['boxes'][ind_th,:])
+        else:
+            im_blob[0, :, :, :] = _get_one_blob(im, roidb['boxes'][ind,:])
         # save blob
         key = 'data_%d' % (ind+1)
         blobs[key] = im_blob
@@ -281,10 +292,9 @@ def im_detect(net, im, roidb):
             blobs = _get_blobs_focus_ho(im, boxes_o, boxes_h)
         else:
             boxes = roidb['boxes']
-            blobs = _get_blobs_focus(im, boxes)
+            blobs = _get_blobs_focus(im, roidb)
     else:
-        boxes = roidb['boxes']
-        blobs, unused_im_scale_factors = _get_blobs(im, boxes)
+        blobs, unused_im_scale_factors = _get_blobs(im, roidb)
 
     # Disable box dedup for HICO
     # # When mapping from image ROIs to feature map ROIs, there's some aliasing

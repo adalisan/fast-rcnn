@@ -113,17 +113,22 @@ class imdb(object):
             if self._flag_hico:
                 if 'index' in self.roidb[i]:
                     # TODO: drop this later
+                    # TODO: add scores
+                    assert(False)
                     entry = {'index' : self.roidb[i]['index'],
                              'label' : self.roidb[i]['label'],
                              'flipped' : True}
                 else:
-                    entry = {'label' : self.roidb[i]['label'],
+                    entry = {'scores' : self.roidb[i]['scores'],
+                             'label' : self.roidb[i]['label'],
                              'flipped' : True}
                 if c1:
                     boxes = self.roidb[i]['boxes'].copy()
                     boxes = self.flip_boxes(boxes, widths[i])
                     entry['boxes'] = boxes
                 if c2:
+                    # TODO: add scores
+                    assert(False)
                     boxes_o = self.roidb[i]['boxes_o'].copy()
                     boxes_h = self.roidb[i]['boxes_h'].copy()
                     boxes_o = self.flip_boxes(boxes_o, widths[i])

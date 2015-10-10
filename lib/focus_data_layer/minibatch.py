@@ -97,7 +97,18 @@ def get_minibatch(roidb, num_classes):
             for ind in xrange(cfg.TOP_K):
                 # Now we just take the top K detection bbox; should consider
                 # sampling K bbox from a larger pool later
-                im_focus = _get_one_blob(im, roidb[im_i]['boxes'][ind,:])
+                if cfg.FLAG_TOP_THRESH:
+                    # we threshold the boxes by scores
+                    keep = np.where(roidb[im_i]['scores'] >= cfg.TOP_THRESH)
+                    if keep[0].size == 0:
+                        xid = 1
+                    else:
+                        xid = np.amax(keep[0]) + 1
+                    ind_th = ind % xid
+                    # print ind_th,
+                    im_focus = _get_one_blob(im, roidb[im_i]['boxes'][ind_th,:])
+                else:
+                    im_focus = _get_one_blob(im, roidb[im_i]['boxes'][ind,:])
                 im_blobs[ind][im_i, :, :, :] = im_focus
 
         labels = roidb[im_i]['label']

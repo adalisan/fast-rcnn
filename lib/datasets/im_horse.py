@@ -177,6 +177,8 @@ class im_horse(datasets.imdb):
                       for index in self._image_index]
         # Expand the dataset; TODO: drop this later
         if self._image_set == 'train2015_single':
+            # TODO: add scores
+            assert(False)
             print 'expanding data for single label training ...'
             roidb = []
             for idx, index in enumerate(self._image_index):
@@ -239,10 +241,13 @@ class im_horse(datasets.imdb):
         # Read boxes
         assert(len(obj_id) == 1 or len(obj_id) == 2)        
         if len(obj_id) == 1:
-            boxes = self._get_boxes_one_object(res, obj_id[0])
-            print boxes.shape
-            return {'boxes' : boxes, 'label' : labels, 'flipped' : False}
+            boxes, scores = self._get_boxes_scores_one_object(res, obj_id[0])
+            print boxes.shape, scores.shape
+            return {'boxes' : boxes, 'scores' : scores, 'label' : labels, 
+                    'flipped' : False}
         if len(obj_id) == 2:
+            # TODO: add scores
+            assert(False)
             boxes_o = self._get_boxes_one_object(res, obj_id[0])
             boxes_h = self._get_boxes_one_object(res, obj_id[1])
             print boxes_o.shape, boxes_h.shape
@@ -262,7 +267,7 @@ class im_horse(datasets.imdb):
                     'label' : labels, 'flipped' : False}
 
     # get boxes for object object with nms
-    def _get_boxes_one_object(self, res, oid):
+    def _get_boxes_scores_one_object(self, res, oid):
         # get boxes for the first object
         dets = res['dets'][0,0][0,oid]
         # NMS: 'keep' will also sort the dets by detection scores
@@ -271,8 +276,10 @@ class im_horse(datasets.imdb):
         # Keep all the detection boxes now and filter later in data fetching
         boxes = dets[:,0:4]
         boxes = np.around(boxes).astype('uint16')
+        # get scores
+        scores = dets[:,4]
         # return
-        return boxes
+        return boxes, scores
 
     # TODO: dropped this later
     def update_image_set_index(self, roidb):

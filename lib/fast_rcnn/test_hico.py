@@ -150,11 +150,12 @@ def _get_blobs(im, rois):
     # so we don't need to handle blob 'rois'
     for ind in xrange(cfg.TOP_K):
         if cfg.FEAT_TYPE == 4:
-            rois_l, rois_t, rois_r, rois_b, \
+            im_rois = [0] * 4
+            im_rois[0], im_rois[1], im_rois[2], im_rois[3], \
                 = _get_4_side_bbox(rois[ind,:], im.shape[1], im.shape[0])
-            for s in ['l','t','r','b']:
+            for i, s in enumerate(['l','t','r','b']):
                 key = 'rois_%d_%s' % (ind+1,s)
-                blobs[key] = _get_rois_blob(rois_l, im_scale_factors)
+                blobs[key] = _get_rois_blob(im_rois[i], im_scale_factors)
         else:
             key = 'rois_%d' % (ind+1)
             if cfg.FLAG_ENLARGE:
@@ -186,8 +187,6 @@ def _get_blobs_focus(im, roidb):
     # This script is only used for HICO (FLAG_HICO will always be False),
     # so we don't need to handle blob 'rois'
     for ind in xrange(cfg.TOP_K):  
-        # initialize blob
-        im_blob = np.zeros((1, 3, cfg.FOCUS_H, cfg.FOCUS_W), dtype=np.float32)
         # Now we just take the top K detection bbox; should consider
         # sampling K bbox from a larger pool later
         if cfg.FLAG_TOP_THRESH:
@@ -197,14 +196,34 @@ def _get_blobs_focus(im, roidb):
                 xid = 1
             else:
                 xid = np.amax(keep[0]) + 1
-            ind_th = ind % xid
-            print ind_th,
-            im_blob[0, :, :, :] = _get_one_blob(im, roidb['boxes'][ind_th,:])
+            pid = ind % xid
         else:
-            im_blob[0, :, :, :] = _get_one_blob(im, roidb['boxes'][ind,:])
-        # save blob
-        key = 'data_%d' % (ind+1)
-        blobs[key] = im_blob
+            pid = ind
+        print pid,
+        # adjust boxes by feature type
+        if cfg.FEAT_TYPE == 4:
+            h_org = im.shape[0]
+            w_org = im.shape[1]
+            box_l, box_t, box_r, box_b \
+                = _get_4_side_bbox(roidb['boxes'][pid,:], w_org, h_org)
+            # round box and convert type to uint16
+            box_l = np.around(box_l[0,:]).astype(np.uint16)
+            box_t = np.around(box_t[0,:]).astype(np.uint16)
+            box_r = np.around(box_r[0,:]).astype(np.uint16)
+            box_b = np.around(box_b[0,:]).astype(np.uint16)
+            # save blob
+            key = 'data_%d_l' % (ind+1)
+            blobs[key] = _get_one_blob(im, box_l)[None, :]
+            key = 'data_%d_t' % (ind+1)
+            blobs[key] = _get_one_blob(im, box_t)[None, :]
+            key = 'data_%d_r' % (ind+1)
+            blobs[key] = _get_one_blob(im, box_r)[None, :]
+            key = 'data_%d_b' % (ind+1)
+            blobs[key] = _get_one_blob(im, box_b)[None, :]
+        else:
+            # save blob
+            key = 'data_%d' % (ind+1)
+            blobs[key] = _get_one_blob(im, roidb['boxes'][pid,:])[None, :]
 
     return blobs
 
@@ -321,8 +340,13 @@ def im_detect(net, im, roidb):
                 net.blobs[key].reshape(*(blobs[key].shape))
         else:
             for ind in xrange(cfg.TOP_K):
-                key = 'data_%d' % (ind+1)
-                net.blobs[key].reshape(*(blobs[key].shape))
+                if cfg.FEAT_TYPE == 4:
+                    for s in ['l','t','r','b']:
+                        key = 'data_%d_%s' % (ind+1,s)
+                        net.blobs[key].reshape(*(blobs[key].shape))
+                else:
+                    key = 'data_%d' % (ind+1)
+                    net.blobs[key].reshape(*(blobs[key].shape))
     else:
         net.blobs['data'].reshape(*(blobs['data'].shape))
         for ind in xrange(cfg.TOP_K):

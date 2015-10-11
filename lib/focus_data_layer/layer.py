@@ -101,6 +101,7 @@ class FocusDataLayer(caffe.Layer):
         # data blob: holds a batch of N image tuples, each tuple contains
         # K cropped windows with 3 channels.
         if cfg.FLAG_HO:
+            # TODO: add feat4
             for ind in xrange(0,cfg.OBJ_K):
                 key = 'data_o%d' % (ind+1)
                 tind = ind
@@ -113,12 +114,20 @@ class FocusDataLayer(caffe.Layer):
                 top[tind].reshape(1, 3, cfg.FOCUS_H, cfg.FOCUS_W)
         else:
             for ind in xrange(0,cfg.TOP_K):
-                # Note that key starts from 1 and _name_to_top_map[key] 
-                # starts from 0
-                key = 'data_%d' % (ind+1)
-                self._name_to_top_map[key] = ind
-                # The height and width (100 x 100) are dummy values
-                top[ind].reshape(1, 3, cfg.FOCUS_H, cfg.FOCUS_W)
+                if cfg.FEAT_TYPE == 4:
+                    for i, s in enumerate(['l','t','r','b']):
+                        # change _name_to_top_map
+                        key = 'data_%d_%s' % (ind+1,s)
+                        self._name_to_top_map[key] = ind*4+i
+                        # reshape
+                        top[ind*4+i].reshape(1, 3, cfg.FOCUS_H, cfg.FOCUS_W)
+                else:
+                    # Note that key starts from 1 and _name_to_top_map[key] 
+                    # starts from 0
+                    key = 'data_%d' % (ind+1)
+                    self._name_to_top_map[key] = ind
+                    # The height and width (100 x 100) are dummy values
+                    top[ind].reshape(1, 3, cfg.FOCUS_H, cfg.FOCUS_W)
 
         # labels blob: binary categorical labels in [0, ..., K-1] for K 
         # foreground classes

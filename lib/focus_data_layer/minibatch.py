@@ -55,7 +55,13 @@ def get_minibatch(roidb, num_classes):
     # im_blob = np.zeros((num_images, cfg.FOCUS_H, cfg.FOCUS_W, 3), 
     #                    dtype=np.float32)
     # im_blob = im_blob.transpose(channel_swap)
+    if cfg.FEAT_TYPE == 4:
+       ffactor = 4
+    else:
+       ffactor = 1
+       assert(cfg.FEAT_TYPE == 0)
     if cfg.FLAG_HO:
+        # TODO: add feat4
         # im_blobs_o = [im_blob.copy()] * cfg.OBJ_K
         # im_blobs_h = [im_blob.copy()] * cfg.HMN_K
         im_blobs_o = [np.zeros((num_images, 3, cfg.FOCUS_H, cfg.FOCUS_W), 
@@ -68,18 +74,21 @@ def get_minibatch(roidb, num_classes):
         # im_blobs = [im_blob.copy()] * cfg.TOP_K
         im_blobs = [np.zeros((num_images, 3, cfg.FOCUS_H, cfg.FOCUS_W), 
                              dtype=np.float32) 
-                    for _ in xrange(cfg.TOP_K)]
+                    for _ in xrange(cfg.TOP_K * ffactor)]
     
     for im_i in xrange(num_images):
         # labels, overlaps, im_rois, bbox_targets, bbox_loss \
         #     = _sample_rois(roidb[im_i], fg_rois_per_image, rois_per_image,
         #                    num_classes)
         im = cv2.imread(roidb[im_i]['image'])
+        h_org = im.shape[0]
+        w_org = im.shape[1]
         # print roidb[im_i]['image']
         if roidb[im_i]['flipped']:
             im = im[:, ::-1, :]
         if cfg.FLAG_HO:
             # TODO: add FLAG_TOP_THRESH
+            # TODO: add feat4
             for ind in xrange(cfg.OBJ_K):
                 im_focus = _get_one_blob(im, roidb[im_i]['boxes_o'][ind,:])
                 # im_focus, save_focus = _get_one_blob(im, roidb[im_i]['boxes_o'][ind,:])
@@ -108,8 +117,25 @@ def get_minibatch(roidb, num_classes):
                     pid = ind % xid
                 else:
                     pid = ind
-                im_focus = _get_one_blob(im, roidb[im_i]['boxes'][pid,:])
-                im_blobs[ind][im_i, :, :, :] = im_focus
+                # adjust boxes by feature type
+                if cfg.FEAT_TYPE == 4:
+                    box_l, box_t, box_r, box_b \
+                        = _get_4_side_bbox(roidb[im_i]['boxes'][pid,:], 
+                                           w_org, 
+                                           h_org)
+                    # round box and convert type to uint16
+                    box_l = np.around(box_l[0,:]).astype(np.uint16)
+                    box_t = np.around(box_t[0,:]).astype(np.uint16)
+                    box_r = np.around(box_r[0,:]).astype(np.uint16)
+                    box_b = np.around(box_b[0,:]).astype(np.uint16)
+                    im_blobs[ind*4+0][im_i, :, :, :] = _get_one_blob(im, box_l)
+                    im_blobs[ind*4+1][im_i, :, :, :] = _get_one_blob(im, box_t)
+                    im_blobs[ind*4+2][im_i, :, :, :] = _get_one_blob(im, box_r)
+                    im_blobs[ind*4+3][im_i, :, :, :] = _get_one_blob(im, box_b)
+                else:
+                    assert(cfg.FEAT_TYPE == 0)
+                    im_focus = _get_one_blob(im, roidb[im_i]['boxes'][pid,:])
+                    im_blobs[ind][im_i, :, :, :] = im_focus
 
         labels = roidb[im_i]['label']
 
@@ -141,8 +167,13 @@ def get_minibatch(roidb, num_classes):
             blobs[key] = im_blobs_h[ind]
     else:
         for ind in xrange(0,cfg.TOP_K):
-            key = 'data_%d' % (ind+1)
-            blobs[key] = im_blobs[ind]
+            if cfg.FEAT_TYPE == 4:
+                for i, s in enumerate(['l','t','r','b']):
+                    key = 'data_%d_%s' % (ind+1,s)
+                    blobs[key] = im_blobs[ind*4+i]
+            else:
+                key = 'data_%d' % (ind+1)
+                blobs[key] = im_blobs[ind]
 
     # if cfg.TRAIN.BBOX_REG:
     #     blobs['bbox_targets'] = bbox_targets_blob
@@ -165,6 +196,37 @@ def _get_one_blob(im, bbox):
     im_focus = im_focus.transpose(channel_swap)
     return im_focus
     # return im_focus, save_im
+
+def _get_4_side_bbox(bbox, im_width, im_height):
+    assert(bbox.ndim == 1 and bbox.shape[0] == 4)
+    # get radius
+    w = bbox[2]-bbox[0]+1;
+    h = bbox[3]-bbox[1]+1;
+    r = (w+h)/2;
+    # get boxes
+    bbox_l = np.array([np.maximum(bbox[0]-0.5*r,1),
+                       bbox[1],
+                       bbox[2]-0.5*w,
+                       bbox[3]])
+    bbox_t = np.array([bbox[0],
+                       np.maximum(bbox[1]-0.5*h,1),
+                       bbox[2],
+                       bbox[3]-0.5*h])
+    bbox_r = np.array([bbox[0]+0.5*w,
+                       bbox[1],
+                       np.minimum(bbox[2]+0.5*r,im_width),
+                       bbox[3]])
+    bbox_b = np.array([bbox[0],
+                       bbox[1]+0.5*h,
+                       bbox[2],
+                       np.minimum(bbox[3]+0.5*h,im_height)])
+    # bbox_l = np.around(bbox_l).astype('uint16')
+    # bbox_t = np.around(bbox_t).astype('uint16')
+    # bbox_r = np.around(bbox_r).astype('uint16')
+    # bbox_b = np.around(bbox_b).astype('uint16')
+
+    # return in the order left, top, right, bottom
+    return bbox_l[None,:], bbox_t[None,:], bbox_r[None,:], bbox_b[None,:]
 
 # def _sample_rois(roidb, fg_rois_per_image, rois_per_image, num_classes):
 #     """Generate a random sample of RoIs comprising foreground and background

@@ -287,6 +287,7 @@ def im_detect(net, im, roidb):
     """
     if cfg.FLAG_FOCUS:
         if cfg.FLAG_HO:
+            # TODO: add scores
             boxes_o = roidb['boxes_o']
             boxes_h = roidb['boxes_h']
             blobs = _get_blobs_focus_ho(im, boxes_o, boxes_h)

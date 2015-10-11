@@ -79,6 +79,7 @@ def get_minibatch(roidb, num_classes):
         if roidb[im_i]['flipped']:
             im = im[:, ::-1, :]
         if cfg.FLAG_HO:
+            # TODO: add FLAG_TOP_THRESH
             for ind in xrange(cfg.OBJ_K):
                 im_focus = _get_one_blob(im, roidb[im_i]['boxes_o'][ind,:])
                 # im_focus, save_focus = _get_one_blob(im, roidb[im_i]['boxes_o'][ind,:])
@@ -104,11 +105,10 @@ def get_minibatch(roidb, num_classes):
                         xid = 1
                     else:
                         xid = np.amax(keep[0]) + 1
-                    ind_th = ind % xid
-                    # print ind_th,
-                    im_focus = _get_one_blob(im, roidb[im_i]['boxes'][ind_th,:])
+                    pid = ind % xid
                 else:
-                    im_focus = _get_one_blob(im, roidb[im_i]['boxes'][ind,:])
+                    pid = ind
+                im_focus = _get_one_blob(im, roidb[im_i]['boxes'][pid,:])
                 im_blobs[ind][im_i, :, :, :] = im_focus
 
         labels = roidb[im_i]['label']

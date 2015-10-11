@@ -119,22 +119,23 @@ class imdb(object):
                              'label' : self.roidb[i]['label'],
                              'flipped' : True}
                 else:
-                    entry = {'scores' : self.roidb[i]['scores'],
-                             'label' : self.roidb[i]['label'],
+                    entry = {'label' : self.roidb[i]['label'],
                              'flipped' : True}
                 if c1:
                     boxes = self.roidb[i]['boxes'].copy()
                     boxes = self.flip_boxes(boxes, widths[i])
                     entry['boxes'] = boxes
+                    entry['scores'] = self.roidb[i]['scores']
                 if c2:
                     # TODO: add scores
-                    assert(False)
                     boxes_o = self.roidb[i]['boxes_o'].copy()
                     boxes_h = self.roidb[i]['boxes_h'].copy()
                     boxes_o = self.flip_boxes(boxes_o, widths[i])
                     boxes_h = self.flip_boxes(boxes_h, widths[i])
                     entry['boxes_o'] = boxes_o
                     entry['boxes_h'] = boxes_h
+                    entry['scores_o'] = self.roidb[i]['scores_o']
+                    entry['scores_h'] = self.roidb[i]['scores_h']
             else:
                 boxes = self.roidb[i]['boxes'].copy()
                 boxes = self.flip_boxes(boxes, widths[i])

@@ -35,9 +35,9 @@ __C.FLAG_ENLARGE = False
 __C.FLAG_HO = False
 
 # top K detection boxes (only for FLAG_HICO = True)
-__C.TOP_K = 1         # for one object input (__C.FLAG_HO == False)
-__C.TOP_THRESH = 0.1  # remove detection with score threshold
-__C.FLAG_TOP_THRESH = True
+__C.TOP_K = 1                # for one object input (__C.FLAG_HO == False)
+__C.FLAG_TOP_THRESH = False  # keep this as false for now
+__C.TOP_THRESH = 0.1         # remove detection with score threshold
 
 __C.OBJ_K = 1  # for two object input (__C.FLAG_HO == True)
 __C.HMN_K = 1  # for two object input (__C.FLAG_HO == True)

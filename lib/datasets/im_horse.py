@@ -241,16 +241,14 @@ class im_horse(datasets.imdb):
         # Read boxes
         assert(len(obj_id) == 1 or len(obj_id) == 2)        
         if len(obj_id) == 1:
-            boxes, scores = self._get_boxes_scores_one_object(res, obj_id[0])
+            boxes, scores = self._get_det_one_object(res, obj_id[0])
             print boxes.shape, scores.shape
             return {'boxes' : boxes, 'scores' : scores, 'label' : labels, 
                     'flipped' : False}
         if len(obj_id) == 2:
-            # TODO: add scores
-            assert(False)
-            boxes_o = self._get_boxes_one_object(res, obj_id[0])
-            boxes_h = self._get_boxes_one_object(res, obj_id[1])
-            print boxes_o.shape, boxes_h.shape
+            boxes_o, scores_o = self._get_det_one_object(res, obj_id[0])
+            boxes_h, scores_h = self._get_det_one_object(res, obj_id[1])
+            print boxes_o.shape, scores_o.shape, boxes_h.shape, scores_h.shape
             # im = cv2.imread(self.image_path_from_index(index))
             # for ind in xrange(10):
             #     savefile = 'test_o%d.jpg' % ind
@@ -263,11 +261,12 @@ class im_horse(datasets.imdb):
             #         bbox = boxes_h[ind,:]
             #         im_focus = im[bbox[1]:bbox[3], bbox[0]:bbox[2]]
             #         cv2.imwrite(savefile,im_focus)
-            return {'boxes_o' : boxes_o, 'boxes_h' : boxes_h, 
+            return {'boxes_o' : boxes_o, 'scores_o' : scores_o, 
+                    'boxes_h' : boxes_h, 'scores_h' : scores_h,
                     'label' : labels, 'flipped' : False}
 
     # get boxes for object object with nms
-    def _get_boxes_scores_one_object(self, res, oid):
+    def _get_det_one_object(self, res, oid):
         # get boxes for the first object
         dets = res['dets'][0,0][0,oid]
         # NMS: 'keep' will also sort the dets by detection scores

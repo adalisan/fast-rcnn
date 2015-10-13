@@ -129,6 +129,12 @@ class FocusDataLayer(caffe.Layer):
                     # The height and width (100 x 100) are dummy values
                     top[ind].reshape(1, 3, cfg.FOCUS_H, cfg.FOCUS_W)
 
+        # full image feature
+        if cfg.FLAG_FULLIM:
+            ind = len(self._name_to_top_map.keys())
+            self._name_to_top_map['data_s'] = ind
+            top[ind].reshape(1, 3, cfg.FOCUS_H, cfg.FOCUS_W)
+
         # labels blob: binary categorical labels in [0, ..., K-1] for K 
         # foreground classes
         ind = len(self._name_to_top_map.keys())

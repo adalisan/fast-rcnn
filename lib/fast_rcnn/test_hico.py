@@ -27,28 +27,29 @@ def _get_4_side_bbox(bbox, im_width, im_height):
     w = bbox[2]-bbox[0]+1;
     h = bbox[3]-bbox[1]+1;
     r = (w+h)/2;
-    # get boxes
-    bbox_l = np.array([np.maximum(bbox[0]-0.5*r,1),
+    # get boxes: indexes are zero-based
+    bbox_l = np.array([np.maximum(bbox[0]-0.5*r,0),
                        bbox[1],
                        bbox[2]-0.5*w,
                        bbox[3]])
     bbox_t = np.array([bbox[0],
-                       np.maximum(bbox[1]-0.5*h,1),
+                       np.maximum(bbox[1]-0.5*h,0),
                        bbox[2],
                        bbox[3]-0.5*h])
     bbox_r = np.array([bbox[0]+0.5*w,
                        bbox[1],
-                       np.minimum(bbox[2]+0.5*r,im_width),
+                       np.minimum(bbox[2]+0.5*r,im_width-1),
                        bbox[3]])
     bbox_b = np.array([bbox[0],
                        bbox[1]+0.5*h,
                        bbox[2],
-                       np.minimum(bbox[3]+0.5*h,im_height)])
+                       np.minimum(bbox[3]+0.5*h,im_height-1)])
 
     # return in the order left, top, right, bottom
     return bbox_l[None,:], bbox_t[None,:], bbox_r[None,:], bbox_b[None,:]
 
 def _enlarge_bbox(bbox, im_width, im_height):
+    # TODO: change indexes to zero-based
     w = bbox[2] - bbox[0] + 1;
     h = bbox[3] - bbox[1] + 1;
     r = (w + h) / 2
@@ -168,7 +169,8 @@ def _get_blobs(im, rois):
 
 def _get_one_blob(im, bbox):
     # crop image
-    im_focus = im[bbox[1]:bbox[3], bbox[0]:bbox[2]]
+    # bbox indexes are zero-based
+    im_focus = im[bbox[1]:bbox[3]+1, bbox[0]:bbox[2]+1]
     im_focus = im_focus.astype(np.float32, copy=False)
     # subtract mean
     im_focus -= cfg.PIXEL_MEANS
@@ -306,7 +308,8 @@ def im_detect(net, im, roidb):
     """
     if cfg.FLAG_FOCUS:
         if cfg.FLAG_HO:
-            # TODO: add scores
+            # TODO: add FLAG_TOP_THRESH
+            # TODO: add feat4
             boxes_o = roidb['boxes_o']
             boxes_h = roidb['boxes_h']
             blobs = _get_blobs_focus_ho(im, boxes_o, boxes_h)
@@ -315,6 +318,13 @@ def im_detect(net, im, roidb):
             blobs = _get_blobs_focus(im, roidb)
     else:
         blobs, unused_im_scale_factors = _get_blobs(im, roidb)
+
+    if cfg.FLAG_FULLIM:
+        assert(cfg.FLAG_FOCUS == True)
+        h_org = im.shape[0]
+        w_org = im.shape[1]
+        box_f = np.array((0,0,w_org-1,h_org-1),dtype='uint16')
+        blobs['data_s'] = _get_one_blob(im, box_f)[None, :]
 
     # Disable box dedup for HICO
     # # When mapping from image ROIs to feature map ROIs, there's some aliasing
@@ -357,6 +367,8 @@ def im_detect(net, im, roidb):
             else:
                 key = 'rois_%d' % (ind+1)
                 net.blobs[key].reshape(*(blobs[key].shape))
+    if cfg.FLAG_FULLIM:
+        net.blobs['data_s'].reshape(*(blobs['data_s'].shape))
 
     # forward pass    
     blobs_out = net.forward(**(blobs))

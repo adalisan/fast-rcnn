@@ -75,6 +75,9 @@ def get_minibatch(roidb, num_classes):
         im_blobs = [np.zeros((num_images, 3, cfg.FOCUS_H, cfg.FOCUS_W), 
                              dtype=np.float32) 
                     for _ in xrange(cfg.TOP_K * ffactor)]
+    if cfg.FLAG_FULLIM:
+        im_blobs_s = np.zeros((num_images, 3, cfg.FOCUS_H, cfg.FOCUS_W),
+                              dtype=np.float32)
     
     for im_i in xrange(num_images):
         # labels, overlaps, im_rois, bbox_targets, bbox_loss \
@@ -137,6 +140,11 @@ def get_minibatch(roidb, num_classes):
                     im_focus = _get_one_blob(im, roidb[im_i]['boxes'][pid,:])
                     im_blobs[ind][im_i, :, :, :] = im_focus
 
+        # full image feature
+        if cfg.FLAG_FULLIM:
+           box_f = np.array((0,0,w_org-1,h_org-1),dtype='uint16')
+           im_blobs_s[im_i, :, :, :] = _get_one_blob(im, box_f)
+
         labels = roidb[im_i]['label']
 
         # # Add to RoIs blob
@@ -159,6 +167,7 @@ def get_minibatch(roidb, num_classes):
     #          'labels': labels_blob}
     blobs = {'labels': labels_blob}
     if cfg.FLAG_HO:
+        # TODO: add feat4
         for ind in xrange(0,cfg.OBJ_K):
             key = 'data_o%d' % (ind+1)
             blobs[key] = im_blobs_o[ind]
@@ -174,7 +183,8 @@ def get_minibatch(roidb, num_classes):
             else:
                 key = 'data_%d' % (ind+1)
                 blobs[key] = im_blobs[ind]
-
+    if cfg.FLAG_FULLIM:
+        blobs['data_s'] = im_blobs_s
     # if cfg.TRAIN.BBOX_REG:
     #     blobs['bbox_targets'] = bbox_targets_blob
     #     blobs['bbox_loss_weights'] = bbox_loss_blob
@@ -183,7 +193,8 @@ def get_minibatch(roidb, num_classes):
 
 def _get_one_blob(im, bbox):
     # crop image
-    im_focus = im[bbox[1]:bbox[3], bbox[0]:bbox[2]]
+    # bbox indexes are zero-based
+    im_focus = im[bbox[1]:bbox[3]+1, bbox[0]:bbox[2]+1]
     # save_im  = im_focus
     im_focus = im_focus.astype(np.float32, copy=False)
     # subtract mean
@@ -203,23 +214,23 @@ def _get_4_side_bbox(bbox, im_width, im_height):
     w = bbox[2]-bbox[0]+1;
     h = bbox[3]-bbox[1]+1;
     r = (w+h)/2;
-    # get boxes
-    bbox_l = np.array([np.maximum(bbox[0]-0.5*r,1),
+    # get boxes: indexes are zero-based
+    bbox_l = np.array([np.maximum(bbox[0]-0.5*r,0),
                        bbox[1],
                        bbox[2]-0.5*w,
                        bbox[3]])
     bbox_t = np.array([bbox[0],
-                       np.maximum(bbox[1]-0.5*h,1),
+                       np.maximum(bbox[1]-0.5*h,0),
                        bbox[2],
                        bbox[3]-0.5*h])
     bbox_r = np.array([bbox[0]+0.5*w,
                        bbox[1],
-                       np.minimum(bbox[2]+0.5*r,im_width),
+                       np.minimum(bbox[2]+0.5*r,im_width-1),
                        bbox[3]])
     bbox_b = np.array([bbox[0],
                        bbox[1]+0.5*h,
                        bbox[2],
-                       np.minimum(bbox[3]+0.5*h,im_height)])
+                       np.minimum(bbox[3]+0.5*h,im_height-1)])
     # bbox_l = np.around(bbox_l).astype('uint16')
     # bbox_t = np.around(bbox_t).astype('uint16')
     # bbox_r = np.around(bbox_r).astype('uint16')

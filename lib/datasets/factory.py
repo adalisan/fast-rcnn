@@ -47,11 +47,22 @@ for top_k in np.arange(1000, 11000, 1000):
 hico_set = ['train2015_single', 'train2015', 'test2015', 'train2015_sigmoid',
             'train2015_person', 'test2015_person',
             'train2015_ho', 'test2015_ho']
-hico_set.append([])
 for image_set in hico_set:
     name = 'im_horse_{}'.format(image_set)
     __sets[name] = (lambda image_set=image_set:
                     datasets.im_horse(image_set, cfg.ROOT_DIR))
+
+# Set up hico using CaffeNet object detector
+file_obj = './data/list_coco_obj'
+list_obj = [line.strip() for line in open(file_obj)];
+hico_set = ['train2015', 'test2015']
+
+for idx, obj_name in enumerate(list_obj):
+    obj_id = '{:02d}'.format(idx+1)
+    for image_set in hico_set:
+        name = 'hico_' + image_set + '_' + obj_id + '_' + obj_name
+        __sets[name] = (lambda image_set=image_set, obj_id=obj_id, obj_name=obj_name:
+                        datasets.hico(image_set, obj_id, obj_name, cfg.ROOT_DIR))
 
 def get_imdb(name):
     """Get an imdb (image database) by name."""

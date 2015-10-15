@@ -142,8 +142,8 @@ def get_minibatch(roidb, num_classes):
 
         # full image feature
         if cfg.FLAG_FULLIM:
-           box_f = np.array((0,0,w_org-1,h_org-1),dtype='uint16')
-           im_blobs_s[im_i, :, :, :] = _get_one_blob(im, box_f)
+            box_f = np.array((0,0,w_org-1,h_org-1),dtype='uint16')
+            im_blobs_s[im_i, :, :, :] = _get_one_blob(im, box_f)
 
         labels = roidb[im_i]['label']
 

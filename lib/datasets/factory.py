@@ -14,6 +14,7 @@ import datasets.im_horse
 import numpy as np
 
 from fast_rcnn.config import cfg
+import os
 
 def _selective_search_IJCV_top_k(split, year, top_k):
     """Return an imdb that uses the top k proposals from the selective search
@@ -53,7 +54,7 @@ for image_set in hico_set:
                     datasets.im_horse(image_set, cfg.ROOT_DIR))
 
 # Set up hico using CaffeNet object detector
-file_obj = './data/list_coco_obj'
+file_obj = os.path.join(cfg.ROOT_DIR, 'data/hico/list_coco_obj')
 list_obj = [line.strip() for line in open(file_obj)];
 hico_set = ['train2015', 'test2015']
 

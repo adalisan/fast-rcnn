@@ -34,6 +34,7 @@ __C.FLAG_SIGMOID = False
 __C.FLAG_ENLARGE = False
 __C.FLAG_HO = False
 __C.FLAG_FULLIM = False
+__C.FLAG_KO_TRAIN = False
 
 # top K detection boxes (only for FLAG_HICO = True)
 __C.TOP_K = 1                # for one object input (__C.FLAG_HO == False)

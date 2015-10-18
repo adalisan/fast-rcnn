@@ -19,7 +19,7 @@ import os.path as osp
 # import cv2
 
 class hico(datasets.imdb):
-    def __init__(self, image_set, obj_id, obj_name, root_dir):
+    def __init__(self, image_set, obj_id, obj_name, root_dir, ko_train):
         # image_set: 'train2015' or 'test2015'
         #            equavilent to 'train2015_ho' and 'test2015_ho' in im_horse
         # obj_id:    '18'
@@ -29,6 +29,7 @@ class hico(datasets.imdb):
         self._image_set = image_set
         self._obj_id    = obj_id
         self._obj_name  = obj_name
+        self._ko_train  = ko_train
         # Set cache root
         self._cache_root = osp.abspath(osp.join(root_dir, 'data', 'cache'))
         if not os.path.exists(self._cache_root):
@@ -49,6 +50,12 @@ class hico(datasets.imdb):
         if image_set == 'train2015':
             lsim = sio.loadmat(self._anno_file)['list_train']
             anno = sio.loadmat(self._anno_file)['anno_train']
+            if self._ko_train:
+                keep_id = [np.where(anno[class_id,ind] == 1)[0].size != 0 \
+                         for ind in xrange(len(lsim))]
+                keep_id = np.array(keep_id)
+                lsim = lsim[keep_id == True]
+                anno = anno[:,keep_id == True]
         if image_set == 'test2015':
             lsim = sio.loadmat(self._anno_file)['list_test']
             anno = sio.loadmat(self._anno_file)['anno_test']
@@ -84,8 +91,12 @@ class hico(datasets.imdb):
 
         This function loads/saves from/to a cache file to speed up future calls.
         """
-        cache_file = os.path.join(self._cache_root,
-                                  self.name + '_det_caffenet_roidb.pkl')
+        if self._ko_train and self._image_set == 'train2015':
+            cache_file = os.path.join(self._cache_root,
+                                      self.name + '_det_caffenet_roidb_ko.pkl')
+        else:
+            cache_file = os.path.join(self._cache_root,
+                                      self.name + '_det_caffenet_roidb.pkl')
 
         if os.path.exists(cache_file):
             with open(cache_file, 'rb') as fid:
@@ -125,6 +136,8 @@ class hico(datasets.imdb):
         # Read labels
         labels = self._anno[:, ind]
         labels[labels != 1] = 0
+        if self._ko_train and self._image_set == 'train2015':
+            assert(np.where(labels == 1)[0].size != 0)
 
         # Read boxes
         boxes_o, scores_o = self._get_det_one_object(res, obj_id)

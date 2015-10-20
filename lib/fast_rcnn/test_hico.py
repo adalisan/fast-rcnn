@@ -478,8 +478,22 @@ def test_net_hico(net, imdb, feat_root):
     # if not os.path.exists(output_dir):
     #     os.makedirs(output_dir)
     
-    if not os.path.exists(feat_root):
-        os.makedirs(feat_root)
+    if len(feat_root) >= 4 and feat_root[-4:] == '.mat':
+        # combine results in one mat file
+        assert(cfg.FLAG_FOCUS and cfg.FLAG_HO)
+        flag_comb = True
+        feat_file = feat_root
+        if os.path.isfile(feat_file):
+            return
+        if not os.path.exists(os.path.split(feat_file)[0]):
+            os.makedirs(os.path.split(feat_file)[0])
+        feats_comb = np.zeros((num_images, net.blobs['score'].data.shape[1]),
+                              dtype=np.float32)
+    else:
+        # output one mat file for each image
+        flag_comb = False
+        if not os.path.exists(feat_root):
+            os.makedirs(feat_root)
 
     assert(cfg.FLAG_HICO == True)
 
@@ -489,16 +503,17 @@ def test_net_hico(net, imdb, feat_root):
     roidb = imdb.roidb
     for i in xrange(num_images):
         im_name = os.path.splitext(os.path.basename(imdb.image_path_at(i)))[0]
-        feat_file = os.path.join(feat_root, im_name + '.mat')
-        if os.path.isfile(feat_file):
-            continue
+
+        if not flag_comb:
+            feat_file = os.path.join(feat_root, im_name + '.mat')
+            if os.path.isfile(feat_file):
+                continue
 
         im = cv2.imread(imdb.image_path_at(i))
         _t['im_detect'].tic()
         scores, boxes, feats = im_detect(net, im, roidb[i])
         _t['im_detect'].toc()
-
-        _t['misc'].tic()
+    
         # for j in xrange(1, imdb.num_classes):
         #     inds = np.where((scores[:, j] > thresh[j]) &
         #                     (roidb[i]['gt_classes'] == 0))[0]
@@ -524,12 +539,19 @@ def test_net_hico(net, imdb, feat_root):
         #     if 0:
         #         keep = nms(all_boxes[j][i], 0.3)
         #         vis_detections(im, imdb.classes[j], all_boxes[j][i][keep, :])
-        sio.savemat(feat_file, {'feat' : feats})
-        _t['misc'].toc()
+        if not flag_comb:
+            _t['misc'].tic()
+            sio.savemat(feat_file, {'feat' : feats})
+            _t['misc'].toc()
+        else:
+            feats_comb[i,:] = feats
 
         print 'im_detect: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_detect'].average_time,
                       _t['misc'].average_time)
+    
+    if flag_comb:
+        sio.savemat(feat_file, {'feat' : feats_comb})
 
     # for j in xrange(1, imdb.num_classes):
     #     for i in xrange(num_images):

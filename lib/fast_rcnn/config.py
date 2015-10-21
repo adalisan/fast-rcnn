@@ -35,6 +35,7 @@ __C.FLAG_ENLARGE = False
 __C.FLAG_HO = False
 __C.FLAG_FULLIM = False
 __C.FLAG_KO_TRAIN = False
+__C.FLAG_CTX8 = False
 
 # top K detection boxes (only for FLAG_HICO = True)
 __C.TOP_K = 1                # for one object input (__C.FLAG_HO == False)
@@ -52,6 +53,9 @@ __C.FEAT_TYPE = 0
 # scale sizes (only for FLAG_FOCUS = True)
 __C.FOCUS_W = 227
 __C.FOCUS_H = 227
+
+# scale sizes (only for FLAG_CTX8 = True)
+__C.FOCUS_LEN_HO = 483
 
 #
 # Training options

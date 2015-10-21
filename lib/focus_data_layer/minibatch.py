@@ -64,13 +64,18 @@ def get_minibatch(roidb, num_classes):
         # TODO: add feat4
         # im_blobs_o = [im_blob.copy()] * cfg.OBJ_K
         # im_blobs_h = [im_blob.copy()] * cfg.HMN_K
-        im_blobs_o = [np.zeros((num_images, 3, cfg.FOCUS_H, cfg.FOCUS_W), 
-                               dtype=np.float32) 
+        if cfg.FLAG_CTX8:
+            LEN_H = cfg.FOCUS_LEN_HO
+            LEN_W = cfg.FOCUS_LEN_HO
+        else:
+            LEN_H = cfg.FOCUS_H
+            LEN_W = cfg.FOCUS_W
+        im_blobs_o = [np.zeros((num_images, 3, LEN_H, LEN_W), dtype=np.float32)
                       for _ in xrange(cfg.OBJ_K)]
-        im_blobs_h = [np.zeros((num_images, 3, cfg.FOCUS_H, cfg.FOCUS_W), 
-                               dtype=np.float32) 
+        im_blobs_h = [np.zeros((num_images, 3, LEN_H, LEN_W), dtype=np.float32)
                       for _ in xrange(cfg.HMN_K)]
     else:
+        # TODO: add ctx8
         # im_blobs = [im_blob.copy()] * cfg.TOP_K
         im_blobs = [np.zeros((num_images, 3, cfg.FOCUS_H, cfg.FOCUS_W), 
                              dtype=np.float32) 
@@ -93,20 +98,35 @@ def get_minibatch(roidb, num_classes):
             # TODO: add FLAG_TOP_THRESH
             # TODO: add feat4
             for ind in xrange(cfg.OBJ_K):
-                im_focus = _get_one_blob(im, roidb[im_i]['boxes_o'][ind,:])
-                # im_focus, save_focus = _get_one_blob(im, roidb[im_i]['boxes_o'][ind,:])
+                if cfg.FLAG_CTX8:
+                    boxes_o  = roidb[im_i]['boxes_o'][ind,:]
+                    bbox_en  = _enlarge_bbox_ctx8(boxes_o, w_org, h_org)
+                    bbox_en  = np.around(bbox_en[0,:]).astype(np.uint16)
+                    im_focus = _get_one_blob(im, bbox_en,
+                                             cfg.FOCUS_LEN_HO, cfg.FOCUS_LEN_HO)
+                else:
+                    im_focus = _get_one_blob(im, roidb[im_i]['boxes_o'][ind,:])
+                    # im_focus, save_focus = _get_one_blob(im, roidb[im_i]['boxes_o'][ind,:])
                 im_blobs_o[ind][im_i, :, :, :] = im_focus
                 # savefile = 'test_i%d_o%d.jpg' % (im_i, ind)
                 # if not os.path.isfile(savefile):
                 #     cv2.imwrite(savefile,save_focus)
             for ind in xrange(cfg.HMN_K):
-                im_focus = _get_one_blob(im, roidb[im_i]['boxes_h'][ind,:])
-                # im_focus, save_focus = _get_one_blob(im, roidb[im_i]['boxes_h'][ind,:])
+                if cfg.FLAG_CTX8:
+                    boxes_h  = roidb[im_i]['boxes_h'][ind,:]
+                    bbox_en  = _enlarge_bbox_ctx8(boxes_h, w_org, h_org)
+                    bbox_en  = np.around(bbox_en[0,:]).astype(np.uint16)
+                    im_focus = _get_one_blob(im, bbox_en,
+                                             cfg.FOCUS_LEN_HO, cfg.FOCUS_LEN_HO)
+                else:
+                    im_focus = _get_one_blob(im, roidb[im_i]['boxes_h'][ind,:])
+                    # im_focus, save_focus = _get_one_blob(im, roidb[im_i]['boxes_h'][ind,:])
                 im_blobs_h[ind][im_i, :, :, :] = im_focus
                 # savefile = 'test_i%d_h%d.jpg' % (im_i, ind)
                 # if not os.path.isfile(savefile):
                 #     cv2.imwrite(savefile,save_focus)
         else:
+            # TODO: add ctx8
             for ind in xrange(cfg.TOP_K):
                 # Now we just take the top K detection bbox; should consider
                 # sampling K bbox from a larger pool later
@@ -191,7 +211,7 @@ def get_minibatch(roidb, num_classes):
 
     return blobs
 
-def _get_one_blob(im, bbox):
+def _get_one_blob(im, bbox, len_w=None, len_h=None):
     # crop image
     # bbox indexes are zero-based
     im_focus = im[bbox[1]:bbox[3]+1, bbox[0]:bbox[2]+1]
@@ -200,8 +220,13 @@ def _get_one_blob(im, bbox):
     # subtract mean
     im_focus -= cfg.PIXEL_MEANS
     # scale
-    im_focus = cv2.resize(im_focus, (cfg.FOCUS_W, cfg.FOCUS_H), 
-                          interpolation=cv2.INTER_LINEAR)
+    if len_w is None and len_h is None:
+        im_focus = cv2.resize(im_focus, (cfg.FOCUS_W, cfg.FOCUS_H),
+                              interpolation=cv2.INTER_LINEAR)
+    else:
+        assert(len_w is not None and len_h is not None)
+        im_focus = cv2.resize(im_focus, (len_w, len_h),
+                              interpolation=cv2.INTER_LINEAR)
     # convert image to blob
     channel_swap = (2, 0, 1)
     im_focus = im_focus.transpose(channel_swap)
@@ -238,6 +263,18 @@ def _get_4_side_bbox(bbox, im_width, im_height):
 
     # return in the order left, top, right, bottom
     return bbox_l[None,:], bbox_t[None,:], bbox_r[None,:], bbox_b[None,:]
+
+def _enlarge_bbox_ctx8(bbox, im_width, im_height):
+    # get radius
+    w = bbox[2]-bbox[0]+1;
+    h = bbox[3]-bbox[1]+1;
+    r = (w+h)/2
+    # get
+    bbox_en = np.array([np.maximum(bbox[0]-0.5*r,0),
+                        np.maximum(bbox[1]-0.5*h,0),
+                        np.minimum(bbox[2]+0.5*r,im_width-1),
+                        np.minimum(bbox[3]+0.5*h,im_height-1)])
+    return bbox_en[None,:]
 
 # def _sample_rois(roidb, fg_rois_per_image, rois_per_image, num_classes):
 #     """Generate a random sample of RoIs comprising foreground and background

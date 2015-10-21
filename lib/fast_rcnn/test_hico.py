@@ -48,6 +48,18 @@ def _get_4_side_bbox(bbox, im_width, im_height):
     # return in the order left, top, right, bottom
     return bbox_l[None,:], bbox_t[None,:], bbox_r[None,:], bbox_b[None,:]
 
+def _enlarge_bbox_ctx8(bbox, im_width, im_height):
+    # get radius
+    w = bbox[2]-bbox[0]+1;
+    h = bbox[3]-bbox[1]+1;
+    r = (w+h)/2
+    # get
+    bbox_en = np.array([np.maximum(bbox[0]-0.5*r,0),
+                        np.maximum(bbox[1]-0.5*h,0),
+                        np.minimum(bbox[2]+0.5*r,im_width-1),
+                        np.minimum(bbox[3]+0.5*h,im_height-1)])
+    return bbox_en[None,:]
+
 def _enlarge_bbox(bbox, im_width, im_height):
     # TODO: change indexes to zero-based
     w = bbox[2] - bbox[0] + 1;
@@ -167,7 +179,7 @@ def _get_blobs(im, rois):
 
     return blobs, im_scale_factors
 
-def _get_one_blob(im, bbox):
+def _get_one_blob(im, bbox, len_w=None, len_h=None):
     # crop image
     # bbox indexes are zero-based
     im_focus = im[bbox[1]:bbox[3]+1, bbox[0]:bbox[2]+1]
@@ -175,8 +187,13 @@ def _get_one_blob(im, bbox):
     # subtract mean
     im_focus -= cfg.PIXEL_MEANS
     # scale
-    im_focus = cv2.resize(im_focus, (cfg.FOCUS_W, cfg.FOCUS_H), 
-                          interpolation=cv2.INTER_LINEAR)
+    if len_w is None and len_h is None:
+        im_focus = cv2.resize(im_focus, (cfg.FOCUS_W, cfg.FOCUS_H),
+                              interpolation=cv2.INTER_LINEAR)
+    else:
+        assert(len_w is not None and len_h is not None)
+        im_focus = cv2.resize(im_focus, (len_w, len_h),
+                              interpolation=cv2.INTER_LINEAR)
     # convert image to blob
     channel_swap = (2, 0, 1)
     im_focus = im_focus.transpose(channel_swap)
@@ -233,14 +250,38 @@ def _get_blobs_focus_ho(im, rois_o, rois_h):
     """Convert an image into network inputs for focus data layer."""
     blobs = {}
 
+    h_org = im.shape[0]
+    w_org = im.shape[1]
     for ind in xrange(cfg.OBJ_K):
-        im_blob = np.zeros((1, 3, cfg.FOCUS_H, cfg.FOCUS_W), dtype=np.float32)
-        im_blob[0, :, :, :] = _get_one_blob(im, rois_o[ind,:])
+        if cfg.FLAG_CTX8:
+            boxes_o = rois_o[ind,:]
+            bbox_en = _enlarge_bbox_ctx8(boxes_o, w_org, h_org)
+            bbox_en = np.around(bbox_en[0,:]).astype(np.uint16)
+            im_blob = np.zeros((1, 3, cfg.FOCUS_LEN_HO, cfg.FOCUS_LEN_HO),
+                               dtype=np.float32)
+            im_blob[0, :, :, :] = _get_one_blob(im, bbox_en,
+                                                cfg.FOCUS_LEN_HO,
+                                                cfg.FOCUS_LEN_HO)
+        else:
+            im_blob = np.zeros((1, 3, cfg.FOCUS_H, cfg.FOCUS_W),
+                               dtype=np.float32)
+            im_blob[0, :, :, :] = _get_one_blob(im, rois_o[ind,:])
         key = 'data_o%d' % (ind+1)
         blobs[key] = im_blob
     for ind in xrange(cfg.HMN_K):
-        im_blob = np.zeros((1, 3, cfg.FOCUS_H, cfg.FOCUS_W), dtype=np.float32)
-        im_blob[0, :, :, :] = _get_one_blob(im, rois_h[ind,:])
+        if cfg.FLAG_CTX8:
+            boxes_h = rois_h[ind,:]
+            bbox_en = _enlarge_bbox_ctx8(boxes_h, w_org, h_org)
+            bbox_en = np.around(bbox_en[0,:]).astype(np.uint16)
+            im_blob = np.zeros((1, 3, cfg.FOCUS_LEN_HO, cfg.FOCUS_LEN_HO),
+                               dtype=np.float32)
+            im_blob[0, :, :, :] = _get_one_blob(im, bbox_en,
+                                                cfg.FOCUS_LEN_HO,
+                                                cfg.FOCUS_LEN_HO)
+        else:
+            im_blob = np.zeros((1, 3, cfg.FOCUS_H, cfg.FOCUS_W),
+                               dtype=np.float32)
+            im_blob[0, :, :, :] = _get_one_blob(im, rois_h[ind,:])
         key = 'data_h%d' % (ind+1)
         blobs[key] = im_blob
 

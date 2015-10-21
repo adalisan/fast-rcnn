@@ -102,17 +102,24 @@ class FocusDataLayer(caffe.Layer):
         # K cropped windows with 3 channels.
         if cfg.FLAG_HO:
             # TODO: add feat4
+            if cfg.FLAG_CTX8:
+                LEN_H = cfg.FOCUS_LEN_HO
+                LEN_W = cfg.FOCUS_LEN_HO
+            else:
+                LEN_H = cfg.FOCUS_H
+                LEN_W = cfg.FOCUS_W
             for ind in xrange(0,cfg.OBJ_K):
                 key = 'data_o%d' % (ind+1)
                 tind = ind
                 self._name_to_top_map[key] = tind
-                top[tind].reshape(1, 3, cfg.FOCUS_H, cfg.FOCUS_W)
+                top[tind].reshape(1, 3, LEN_H, LEN_W)
             for ind in xrange(0,cfg.HMN_K):
                 key = 'data_h%d' % (ind+1)
                 tind = ind + cfg.OBJ_K
                 self._name_to_top_map[key] = tind
-                top[tind].reshape(1, 3, cfg.FOCUS_H, cfg.FOCUS_W)
+                top[tind].reshape(1, 3, LEN_H, LEN_W)
         else:
+            # TODO: add ctx8
             for ind in xrange(0,cfg.TOP_K):
                 if cfg.FEAT_TYPE == 4:
                     for i, s in enumerate(['l','t','r','b']):

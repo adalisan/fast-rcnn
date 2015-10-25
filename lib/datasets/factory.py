@@ -64,7 +64,7 @@ for idx, obj_name in enumerate(list_obj):
         name = 'hico_' + image_set + '_' + obj_id + '_' + obj_name
         __sets[name] = (lambda image_set=image_set, obj_id=obj_id, obj_name=obj_name:
                         datasets.hico(image_set, obj_id, obj_name, cfg.ROOT_DIR,
-                                      cfg.FLAG_KO_TRAIN))
+                                      cfg.FLAG_KO_TRAIN, cfg.FLAG_KO_TEST))
 
 def get_imdb(name):
     """Get an imdb (image database) by name."""

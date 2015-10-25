@@ -35,6 +35,7 @@ __C.FLAG_ENLARGE = False
 __C.FLAG_HO = False
 __C.FLAG_FULLIM = False
 __C.FLAG_KO_TRAIN = False
+__C.FLAG_KO_TEST = False
 __C.FLAG_CTX8 = False
 
 # top K detection boxes (only for FLAG_HICO = True)

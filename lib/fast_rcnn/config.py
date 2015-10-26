@@ -37,6 +37,7 @@ __C.FLAG_FULLIM = False
 __C.FLAG_KO_TRAIN = False
 __C.FLAG_KO_TEST = False
 __C.FLAG_CTX8 = False
+__C.FLAG_FG_BATCH = False
 
 # top K detection boxes (only for FLAG_HICO = True)
 __C.TOP_K = 1                # for one object input (__C.FLAG_HO == False)
@@ -57,6 +58,9 @@ __C.FOCUS_H = 227
 
 # scale sizes (only for FLAG_CTX8 = True)
 __C.FOCUS_LEN_HO = 483
+
+# FG OBJ FRACTION PER BATCH
+__C.FG_OBJ_FRACTION = 0.15
 
 #
 # Training options

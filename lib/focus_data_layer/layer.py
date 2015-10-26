@@ -14,8 +14,43 @@ import numpy as np
 import yaml
 # from multiprocessing import Process, Queue
 
+import math
+
 class FocusDataLayer(caffe.Layer):
     """Focus data layer."""
+
+    def _shuffle_roidb_inds_obj(self):
+        """Randomly permute the training roidb. Make sure each batch will have
+        XXX examples with at least one positive label
+        """
+        # obj_per_batch = 2
+        # bg_per_batch = 10
+        obj_per_batch = int(round(cfg.TRAIN.IMS_PER_BATCH* cfg.FG_OBJ_FRACTION))
+        bg_per_batch = cfg.TRAIN.IMS_PER_BATCH - obj_per_batch
+        # print 'obj_per_batch: {}'.format(obj_per_batch)
+        # print 'bg_per_batch: {}'.format(bg_per_batch)
+
+        obj_id = [idx for idx, roi in enumerate(self._roidb)
+                  if np.where(roi['label'] == 1)[0].size != 0];
+        bg_id = list(set(range(len(self._roidb))) - set(obj_id))
+        # print len(obj_id), len(bg_id)
+
+        perm_obj = np.random.permutation(np.arange(len(obj_id)))
+        perm_bg  = np.random.permutation(np.arange(len(bg_id)))
+        # print perm_obj.size, perm_bg.size
+
+        perm = np.array([],dtype='int64')
+        num_batch = int(math.ceil(float(len(bg_id)) / float(bg_per_batch)))
+        for ind in xrange(num_batch):
+            ind_obj = range(ind*obj_per_batch,(ind+1)*obj_per_batch)
+            ind_bg  = range(ind*bg_per_batch,(ind+1)*bg_per_batch)
+            ind_obj = [i % len(obj_id) for i in ind_obj]
+            ind_bg  = [i % len(bg_id) for i in ind_bg]
+            perm = np.append(perm, perm_obj[ind_obj])
+            perm = np.append(perm, perm_bg[ind_bg])
+
+        self._perm = perm
+        self._cur = 0
 
     def _shuffle_roidb_inds(self):
         """Randomly permute the training roidb."""
@@ -24,8 +59,15 @@ class FocusDataLayer(caffe.Layer):
 
     def _get_next_minibatch_inds(self):
         """Return the roidb indices for the next minibatch."""
-        if self._cur + cfg.TRAIN.IMS_PER_BATCH >= len(self._roidb):
-            self._shuffle_roidb_inds()
+        # if self._cur + cfg.TRAIN.IMS_PER_BATCH >= len(self._roidb):
+        #     self._shuffle_roidb_inds()
+        if self._fg_batch:
+            # print 'shuffle roidb ind ... '
+            if self._cur + cfg.TRAIN.IMS_PER_BATCH >= len(self._perm):
+                self._shuffle_roidb_inds_obj()
+        else:
+            if self._cur + cfg.TRAIN.IMS_PER_BATCH >= len(self._roidb):
+                self._shuffle_roidb_inds()
 
         db_inds = self._perm[self._cur:self._cur + cfg.TRAIN.IMS_PER_BATCH]
         self._cur += cfg.TRAIN.IMS_PER_BATCH
@@ -45,10 +87,17 @@ class FocusDataLayer(caffe.Layer):
             minibatch_db = [self._roidb[i] for i in db_inds]
             return get_minibatch(minibatch_db, self._num_classes)
 
-    def set_roidb(self, roidb):
+    def set_roidb(self, roidb, fg_batch):
         """Set the roidb to be used by this layer during training."""
         self._roidb = roidb
-        self._shuffle_roidb_inds()
+        # self._shuffle_roidb_inds()
+        if fg_batch:
+            # print 'use fix fg obj num per batch'
+            self._fg_batch = True
+            self._shuffle_roidb_inds_obj()
+        else:
+            self._fg_batch = False
+            self._shuffle_roidb_inds()
         if cfg.TRAIN.USE_PREFETCH:
             # self._blob_queue = Queue(10)
             # self._prefetch_process = BlobFetcher(self._blob_queue,

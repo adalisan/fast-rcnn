@@ -44,10 +44,14 @@ class SolverWrapper(object):
         with open(solver_prototxt, 'rt') as f:
             pb2.text_format.Merge(f.read(), self.solver_param)
 
-        self.solver.net.layers[0].set_roidb(roidb)
+        # self.solver.net.layers[0].set_roidb(roidb)
+        if cfg.FLAG_FG_BATCH:
+            self.solver.net.layers[0].set_roidb(roidb, True)
+        else:
+            self.solver.net.layers[0].set_roidb(roidb, False)
         # for now just consider unflipped images for test (for speeding up)
         for test_net in self.solver.test_nets:
-            test_net.layers[0].set_roidb(roidb[0:len(roidb)/2])
+            test_net.layers[0].set_roidb(roidb[0:len(roidb)/2], False)
 
     def snapshot(self):
         """Take a snapshot of the network after unnormalizing the learned

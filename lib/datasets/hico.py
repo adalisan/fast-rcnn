@@ -19,7 +19,8 @@ import os.path as osp
 # import cv2
 
 class hico(datasets.imdb):
-    def __init__(self, image_set, obj_id, obj_name, root_dir, ko_train, ko_test):
+    def __init__(self, image_set, obj_id, obj_name, root_dir,
+                 ko_train, ko_test, samp_neg):
         # image_set: 'train2015' or 'test2015'
         #            equavilent to 'train2015_ho' and 'test2015_ho' in im_horse
         # obj_id:    '18'
@@ -31,13 +32,15 @@ class hico(datasets.imdb):
         self._obj_name  = obj_name
         self._ko_train  = ko_train
         self._ko_test   = ko_test
+        self._samp_neg  = samp_neg
         # Set cache root
         self._cache_root = osp.abspath(osp.join(root_dir, 'data', 'cache'))
         if not os.path.exists(self._cache_root):
             os.makedirs(self._cache_root)
         # Set input paths and files
         self._data_path = './external/hico_20150920/images/' + image_set
-        self._anno_file = './external/hico_20150920/anno.mat'
+        # self._anno_file = './external/hico_20150920/anno.mat'
+        self._anno_file = './data/data/annotation/anno_cvpr.mat'
         self._det_path  = './caches/det_base_caffenet/' + image_set
         # Set classes
         list_action = sio.loadmat(self._anno_file)['list_action']
@@ -56,7 +59,24 @@ class hico(datasets.imdb):
                          for ind in xrange(len(lsim))]
                 keep_id = np.array(keep_id)
                 lsim = lsim[keep_id == True]
-                anno = anno[:,keep_id == True]
+                anno = anno[:, keep_id == True]
+            if self._samp_neg:
+                assert(self._ko_train == False)
+                anno = sio.loadmat(self._anno_file)['anno_hoinet']
+                keep_id = [   np.where(anno[class_id,ind] == 1)[0].size != 0 \
+                           or np.where(anno[class_id,ind] == -2)[0].size == len(class_id) \
+                           for ind in xrange(len(lsim))]
+                keep_id = np.array(keep_id)
+                lsim = lsim[keep_id == True]
+                anno = anno[:, keep_id == True]
+                # hard-coded check
+                # assert(sum(keep_id) == 5000)
+                # num_obj = sum([np.where(anno[class_id,ind] == 1)[0].size != 0 \
+                #                for ind in xrange(len(lsim))])
+                # num_bg  = sum([np.where(anno[class_id,ind] == -2)[0].size != 0 \
+                #                for ind in xrange(len(lsim))])
+                # print 'num obj: {}'.format(num_obj)
+                # print 'num bg: {}'.format(num_bg)
         if image_set == 'test2015':
             lsim = sio.loadmat(self._anno_file)['list_test']
             anno = sio.loadmat(self._anno_file)['anno_test']
@@ -65,7 +85,7 @@ class hico(datasets.imdb):
                          for ind in xrange(len(lsim))]
                 keep_id = np.array(keep_id)
                 lsim = lsim[keep_id == True]
-                anno = anno[:,keep_id == True]
+                anno = anno[:, keep_id == True]
         self._image_index = [str(im[0][0]) for im in lsim]
         self._anno = anno[class_id,:]
         # Default to roidb handler
@@ -102,6 +122,9 @@ class hico(datasets.imdb):
              or (self._ko_test  and self._image_set == 'test2015')):
             cache_file = os.path.join(self._cache_root,
                                       self.name + '_det_caffenet_roidb_ko.pkl')
+        elif self._samp_neg and self._image_set == 'train2015':
+            cache_file = os.path.join(self._cache_root,
+                                      self.name + '_det_caffenet_roidb_samp.pkl')
         else:
             cache_file = os.path.join(self._cache_root,
                                       self.name + '_det_caffenet_roidb.pkl')

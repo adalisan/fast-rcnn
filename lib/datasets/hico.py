@@ -20,7 +20,7 @@ import os.path as osp
 
 class hico(datasets.imdb):
     def __init__(self, image_set, obj_id, obj_name, root_dir,
-                 ko_train, ko_test, samp_neg):
+                 ko_train, ko_test, samp_neg, cv):
         # image_set: 'train2015' or 'test2015'
         #            equavilent to 'train2015_ho' and 'test2015_ho' in im_horse
         # obj_id:    '18'
@@ -33,15 +33,25 @@ class hico(datasets.imdb):
         self._ko_train  = ko_train
         self._ko_test   = ko_test
         self._samp_neg  = samp_neg
+        self._cv        = cv
         # Set cache root
         self._cache_root = osp.abspath(osp.join(root_dir, 'data', 'cache'))
         if not os.path.exists(self._cache_root):
             os.makedirs(self._cache_root)
-        # Set input paths and files
-        self._data_path = './external/hico_20150920/images/' + image_set
-        # self._anno_file = './external/hico_20150920/anno.mat'
-        self._anno_file = './data/data/annotation/anno_cvpr.mat'
-        self._det_path  = './caches/det_base_caffenet/' + image_set
+        # Set input paths and files        
+        if cv == 0:
+            self._data_path = './external/hico_20150920/images/' + image_set
+            # self._anno_file = './external/hico_20150920/anno.mat'
+            self._anno_file = './data/data/annotation/anno_cvpr.mat'
+            self._det_path  = './caches/det_base_caffenet/' + image_set
+        else:
+            assert(cv == 1 or cv == 2)
+            if cv == 1:
+                self._anno_file = './data/data/annotation/anno_cv_01.mat'
+            if cv == 2:
+                self._anno_file = './data/data/annotation/anno_cv_02.mat'
+            self._data_path = './external/hico_20150920/images/' + 'train2015'
+            self._det_path  = './caches/det_base_caffenet/' + 'train2015'
         # Set classes
         list_action = sio.loadmat(self._anno_file)['list_action']
         class_id = [idx for idx, action in enumerate(list_action) 
@@ -118,16 +128,23 @@ class hico(datasets.imdb):
 
         This function loads/saves from/to a cache file to speed up future calls.
         """
-        if (    (self._ko_train and self._image_set == 'train2015')
-             or (self._ko_test  and self._image_set == 'test2015')):
-            cache_file = os.path.join(self._cache_root,
-                                      self.name + '_det_caffenet_roidb_ko.pkl')
-        elif self._samp_neg and self._image_set == 'train2015':
-            cache_file = os.path.join(self._cache_root,
-                                      self.name + '_det_caffenet_roidb_samp.pkl')
+        if self._cv == 0:
+            if (    (self._ko_train and self._image_set == 'train2015')
+                 or (self._ko_test  and self._image_set == 'test2015')):
+                cache_file = os.path.join(self._cache_root,
+                                          self.name + '_det_caffenet_roidb_ko.pkl')
+            elif self._samp_neg and self._image_set == 'train2015':
+                cache_file = os.path.join(self._cache_root,
+                                          self.name + '_det_caffenet_roidb_samp.pkl')
+            else:
+                cache_file = os.path.join(self._cache_root,
+                                          self.name + '_det_caffenet_roidb.pkl')
         else:
+            assert(self._ko_train == False)
+            assert(self._ko_test == False)
+            assert(self._samp_neg == True)
             cache_file = os.path.join(self._cache_root,
-                                      self.name + '_det_caffenet_roidb.pkl')
+                                      self.name + '_det_caffenet_roidb_cv{0:02d}.pkl'.format(self._cv))
 
         if os.path.exists(cache_file):
             with open(cache_file, 'rb') as fid:

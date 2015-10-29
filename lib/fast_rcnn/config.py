@@ -39,6 +39,7 @@ __C.FLAG_KO_TEST = False
 __C.FLAG_CTX8 = False
 __C.FLAG_FG_BATCH = False
 __C.FLAG_SAMP_NEG = False
+__C.FLAG_CV = 0
 
 # top K detection boxes (only for FLAG_HICO = True)
 __C.TOP_K = 1                # for one object input (__C.FLAG_HO == False)

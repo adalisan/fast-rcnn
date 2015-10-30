@@ -72,10 +72,10 @@ class hico(datasets.imdb):
                 anno = anno[:, keep_id == True]
             if self._samp_neg:
                 assert(self._ko_train == False)
-                anno = sio.loadmat(self._anno_file)['anno_hoinet']
                 keep_id = [   np.where(anno[class_id,ind] == 1)[0].size != 0 \
                            or np.where(anno[class_id,ind] == -2)[0].size == len(class_id) \
                            for ind in xrange(len(lsim))]
+                print 'num keep: {}'.format(sum(keep_id))
                 keep_id = np.array(keep_id)
                 lsim = lsim[keep_id == True]
                 anno = anno[:, keep_id == True]

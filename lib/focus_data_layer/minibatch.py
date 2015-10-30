@@ -46,6 +46,12 @@ def get_minibatch(roidb, num_classes):
     # rois_blob = np.zeros((0, 5), dtype=np.float32)
     assert(roidb[0]['label'].shape[0] == num_classes)
     labels_blob = np.zeros((0, roidb[0]['label'].shape[0]), dtype=np.float32)
+    if cfg.FLAG_SHARE_VB:
+        assert(roidb[0]['label_vb'].shape[0] == num_classes)
+        labels_vb_blob = np.zeros((0, roidb[0]['label_vb'].shape[0]),
+                                  dtype=np.float32)
+    else:
+        assert(roidb[0]['label_vb'] == None)
     # bbox_targets_blob = np.zeros((0, 4 * num_classes), dtype=np.float32)
     # bbox_loss_blob = np.zeros(bbox_targets_blob.shape, dtype=np.float32)
     # all_overlaps = []
@@ -166,6 +172,8 @@ def get_minibatch(roidb, num_classes):
             im_blobs_s[im_i, :, :, :] = _get_one_blob(im, box_f)
 
         labels = roidb[im_i]['label']
+        if cfg.FLAG_SHARE_VB:
+            labels_vb = roidb[im_i]['label_vb']
 
         # # Add to RoIs blob
         # rois = _project_im_rois(im_rois, im_scales[im_i])
@@ -175,6 +183,8 @@ def get_minibatch(roidb, num_classes):
 
         # Add to labels, bbox targets, and bbox loss blobs
         labels_blob = np.vstack((labels_blob, labels.T))
+        if cfg.FLAG_SHARE_VB:
+            labels_vb_blob = np.vstack((labels_vb_blob, labels_vb.T))
         # bbox_targets_blob = np.vstack((bbox_targets_blob, bbox_targets))
         # bbox_loss_blob = np.vstack((bbox_loss_blob, bbox_loss))
         # all_overlaps = np.hstack((all_overlaps, overlaps))
@@ -186,6 +196,8 @@ def get_minibatch(roidb, num_classes):
     #          'rois': rois_blob,
     #          'labels': labels_blob}
     blobs = {'labels': labels_blob}
+    if cfg.FLAG_SHARE_VB:
+        blobs['labels_vb'] = labels_vb_blob
     if cfg.FLAG_HO:
         # TODO: add feat4
         for ind in xrange(0,cfg.OBJ_K):

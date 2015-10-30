@@ -64,13 +64,19 @@ class hico(datasets.imdb):
         if image_set == 'train2015':
             lsim = sio.loadmat(self._anno_file)['list_train']
             anno = sio.loadmat(self._anno_file)['anno_train']
+            anno_vb = sio.loadmat(self._anno_file)['anno_vb']
             if self._ko_train:
+                # FLAG_SHARE_VB should be kept False
                 keep_id = [np.where(anno[class_id,ind] == 1)[0].size != 0 \
                          for ind in xrange(len(lsim))]
                 keep_id = np.array(keep_id)
                 lsim = lsim[keep_id == True]
                 anno = anno[:, keep_id == True]
+                anno_vb = None
             if self._samp_neg:
+                # FLAG_SHARE_VB should be kept False; using SHARE_VB does not
+                # replicate what we did in ICCV (since we are not using the
+                # full training set.
                 assert(self._ko_train == False)
                 keep_id = [   np.where(anno[class_id,ind] == 1)[0].size != 0 \
                            or np.where(anno[class_id,ind] == -2)[0].size == len(class_id) \
@@ -79,6 +85,7 @@ class hico(datasets.imdb):
                 keep_id = np.array(keep_id)
                 lsim = lsim[keep_id == True]
                 anno = anno[:, keep_id == True]
+                anno_vb = None
                 # hard-coded check
                 # assert(sum(keep_id) == 5000)
                 # num_obj = sum([np.where(anno[class_id,ind] == 1)[0].size != 0 \
@@ -98,6 +105,8 @@ class hico(datasets.imdb):
                 anno = anno[:, keep_id == True]
         self._image_index = [str(im[0][0]) for im in lsim]
         self._anno = anno[class_id,:]
+        if image_set == 'train2015' and anno_vb is not None:
+            self._anno_vb = anno_vb[class_id,:]
         # Default to roidb handler
         self._roidb_handler = self.object_detection_roidb
         # Check path exists
@@ -164,7 +173,7 @@ class hico(datasets.imdb):
     def _load_detection_roidb(self):        
         # Load detection results
         num_images = len(self._image_index)
-        print 'num_image: {}'.format(num_images)
+        print 'num image: {}'.format(num_images)
         roidb = [self._load_detection(ind) for ind in xrange(num_images)]
         return roidb
 
@@ -188,6 +197,13 @@ class hico(datasets.imdb):
              or (self._ko_test  and self._image_set == 'test2015')):
             assert(np.where(labels == 1)[0].size != 0)
 
+        # Read VB labels
+        if self._image_set == 'train2015' and self._anno_vb is not None:
+            labels_vb = self._anno_vb[:, ind]
+            assert(np.all(labels_vb[labels_vb != 1] == 0))
+        else:
+            labels_vb = None
+
         # Read boxes
         boxes_o, scores_o = self._get_det_one_object(res, obj_id)
         boxes_h, scores_h = self._get_det_one_object(res, hmn_id)
@@ -206,7 +222,8 @@ class hico(datasets.imdb):
         #         cv2.imwrite(savefile,im_focus)
         return {'boxes_o' : boxes_o, 'scores_o' : scores_o, 
                 'boxes_h' : boxes_h, 'scores_h' : scores_h,
-                'label' : labels, 'flipped' : False}
+                'label' : labels, 'label_vb' : labels_vb,
+                'flipped' : False}
 
     # get boxes for object object with nms
     def _get_det_one_object(self, res, obj_id):

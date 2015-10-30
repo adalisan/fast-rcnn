@@ -197,6 +197,12 @@ class FocusDataLayer(caffe.Layer):
         self._name_to_top_map['labels'] = ind
         top[ind].reshape(1, self._num_classes)
 
+        # labels_vb blob
+        if cfg.FLAG_SHARE_VB:
+            ind = len(self._name_to_top_map.keys())
+            self._name_to_top_map['labels_vb'] = ind
+            top[ind].reshape(1, self._num_classes)
+
         # if cfg.TRAIN.BBOX_REG:
         #     self._name_to_top_map['bbox_targets'] = 3
         #     self._name_to_top_map['bbox_loss_weights'] = 4

@@ -117,9 +117,11 @@ class imdb(object):
                     assert(False)
                     entry = {'index' : self.roidb[i]['index'],
                              'label' : self.roidb[i]['label'],
+                             'label_vb' : self.roidb[i]['label_vb'],
                              'flipped' : True}
                 else:
                     entry = {'label' : self.roidb[i]['label'],
+                             'label_vb' : self.roidb[i]['label_vb'],
                              'flipped' : True}
                 if c1:
                     boxes = self.roidb[i]['boxes'].copy()

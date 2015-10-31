@@ -50,8 +50,6 @@ def get_minibatch(roidb, num_classes):
         assert(roidb[0]['label_vb'].shape[0] == num_classes)
         labels_vb_blob = np.zeros((0, roidb[0]['label_vb'].shape[0]),
                                   dtype=np.float32)
-    else:
-        assert(roidb[0]['label_vb'] == None)
     # bbox_targets_blob = np.zeros((0, 4 * num_classes), dtype=np.float32)
     # bbox_loss_blob = np.zeros(bbox_targets_blob.shape, dtype=np.float32)
     # all_overlaps = []

@@ -107,6 +107,8 @@ class hico(datasets.imdb):
         self._anno = anno[class_id,:]
         if image_set == 'train2015' and anno_vb is not None:
             self._anno_vb = anno_vb[class_id,:]
+        else:
+            self._anno_vb = None
         # Default to roidb handler
         self._roidb_handler = self.object_detection_roidb
         # Check path exists

@@ -255,7 +255,7 @@ def _get_4_side_bbox(bbox, im_width, im_height):
                        bbox[2]-0.5*w,
                        bbox[3]])
     bbox_t = np.array([bbox[0],
-                       np.maximum(bbox[1]-0.5*h,0),
+                       np.maximum(bbox[1]-0.5*r,0),
                        bbox[2],
                        bbox[3]-0.5*h])
     bbox_r = np.array([bbox[0]+0.5*w,
@@ -265,7 +265,7 @@ def _get_4_side_bbox(bbox, im_width, im_height):
     bbox_b = np.array([bbox[0],
                        bbox[1]+0.5*h,
                        bbox[2],
-                       np.minimum(bbox[3]+0.5*h,im_height-1)])
+                       np.minimum(bbox[3]+0.5*r,im_height-1)])
     # bbox_l = np.around(bbox_l).astype('uint16')
     # bbox_t = np.around(bbox_t).astype('uint16')
     # bbox_r = np.around(bbox_r).astype('uint16')
@@ -281,9 +281,9 @@ def _enlarge_bbox_ctx8(bbox, im_width, im_height):
     r = (w+h)/2
     # get
     bbox_en = np.array([np.maximum(bbox[0]-0.5*r,0),
-                        np.maximum(bbox[1]-0.5*h,0),
+                        np.maximum(bbox[1]-0.5*r,0),
                         np.minimum(bbox[2]+0.5*r,im_width-1),
-                        np.minimum(bbox[3]+0.5*h,im_height-1)])
+                        np.minimum(bbox[3]+0.5*r,im_height-1)])
     return bbox_en[None,:]
 
 # def _sample_rois(roidb, fg_rois_per_image, rois_per_image, num_classes):

@@ -33,7 +33,7 @@ def _get_4_side_bbox(bbox, im_width, im_height):
                        bbox[2]-0.5*w,
                        bbox[3]])
     bbox_t = np.array([bbox[0],
-                       np.maximum(bbox[1]-0.5*h,0),
+                       np.maximum(bbox[1]-0.5*r,0),
                        bbox[2],
                        bbox[3]-0.5*h])
     bbox_r = np.array([bbox[0]+0.5*w,
@@ -43,7 +43,7 @@ def _get_4_side_bbox(bbox, im_width, im_height):
     bbox_b = np.array([bbox[0],
                        bbox[1]+0.5*h,
                        bbox[2],
-                       np.minimum(bbox[3]+0.5*h,im_height-1)])
+                       np.minimum(bbox[3]+0.5*r,im_height-1)])
 
     # return in the order left, top, right, bottom
     return bbox_l[None,:], bbox_t[None,:], bbox_r[None,:], bbox_b[None,:]
@@ -55,9 +55,9 @@ def _enlarge_bbox_ctx8(bbox, im_width, im_height):
     r = (w+h)/2
     # get
     bbox_en = np.array([np.maximum(bbox[0]-0.5*r,0),
-                        np.maximum(bbox[1]-0.5*h,0),
+                        np.maximum(bbox[1]-0.5*r,0),
                         np.minimum(bbox[2]+0.5*r,im_width-1),
-                        np.minimum(bbox[3]+0.5*h,im_height-1)])
+                        np.minimum(bbox[3]+0.5*r,im_height-1)])
     return bbox_en[None,:]
 
 def _enlarge_bbox(bbox, im_width, im_height):

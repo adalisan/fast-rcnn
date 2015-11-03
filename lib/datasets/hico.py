@@ -65,7 +65,7 @@ class hico(datasets.imdb):
             lsim = sio.loadmat(self._anno_file)['list_train']
             anno = sio.loadmat(self._anno_file)['anno_train']
             anno_vb = sio.loadmat(self._anno_file)['anno_vb']
-            if self._ko_train:
+            if self._ko_train and not self._samp_neg:
                 # FLAG_SHARE_VB should be kept False
                 keep_id = [np.where(anno[class_id,ind] == 1)[0].size != 0 \
                          for ind in xrange(len(lsim))]
@@ -73,7 +73,7 @@ class hico(datasets.imdb):
                 lsim = lsim[keep_id == True]
                 anno = anno[:, keep_id == True]
                 anno_vb = None
-            if self._samp_neg:
+            if self._samp_neg and not self._ko_train:
                 # FLAG_SHARE_VB should be kept False; using SHARE_VB does not
                 # replicate what we did in ICCV (since we are not using the
                 # full training set.
@@ -94,6 +94,22 @@ class hico(datasets.imdb):
                 #                for ind in xrange(len(lsim))])
                 # print 'num obj: {}'.format(num_obj)
                 # print 'num bg: {}'.format(num_bg)
+            if self._ko_train and self._samp_neg:
+                keep_id = [   np.where(anno[class_id,ind] == 1)[0].size != 0 \
+                           or np.where(anno[class_id,ind] == -2)[0].size == len(class_id) \
+                           for ind in xrange(len(lsim))]
+                print 'num keep (samp_neg): {}'.format(sum(keep_id))
+                keep_id = np.array(keep_id)
+                lsim = lsim[keep_id == True]
+                anno = anno[:, keep_id == True]
+                anno_vb = anno_vb[:, keep_id == True]
+                keep_id = [np.where(anno_vb[class_id,ind] == 1)[0].size != 0 \
+                           for ind in xrange(len(lsim))]
+                print 'num keep (ko_train): {}'.format(sum(keep_id))
+                keep_id = np.array(keep_id)
+                lsim = lsim[keep_id == True]
+                anno = anno[:, keep_id == True]
+                anno_vb = anno_vb[:, keep_id == True]
         if image_set == 'test2015':
             lsim = sio.loadmat(self._anno_file)['list_test']
             anno = sio.loadmat(self._anno_file)['anno_test']
@@ -140,13 +156,16 @@ class hico(datasets.imdb):
         This function loads/saves from/to a cache file to speed up future calls.
         """
         if self._cv == 0:
-            if (    (self._ko_train and self._image_set == 'train2015')
+            if (    (self._ko_train and not self._samp_neg and self._image_set == 'train2015')
                  or (self._ko_test  and self._image_set == 'test2015')):
                 cache_file = os.path.join(self._cache_root,
                                           self.name + '_det_caffenet_roidb_ko.pkl')
-            elif self._samp_neg and self._image_set == 'train2015':
+            elif self._samp_neg and not self._ko_train and self._image_set == 'train2015':
                 cache_file = os.path.join(self._cache_root,
                                           self.name + '_det_caffenet_roidb_samp.pkl')
+            elif self._ko_train and self._samp_neg and self._image_set == 'train2015':
+                cache_file = os.path.join(self._cache_root,
+                                          self.name + '_det_caffenet_roidb_ko_svb.pkl')
             else:
                 cache_file = os.path.join(self._cache_root,
                                           self.name + '_det_caffenet_roidb.pkl')
@@ -195,7 +214,7 @@ class hico(datasets.imdb):
         # Read labels
         labels = self._anno[:, ind]
         labels[labels != 1] = 0
-        if (    (self._ko_train and self._image_set == 'train2015')
+        if (    (self._ko_train and not self._samp_neg and self._image_set == 'train2015')
              or (self._ko_test  and self._image_set == 'test2015')):
             assert(np.where(labels == 1)[0].size != 0)
 

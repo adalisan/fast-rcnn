@@ -54,11 +54,18 @@ class hico(datasets.imdb):
             self._det_path  = './caches/det_base_caffenet/' + 'train2015'
         # Set classes
         list_action = sio.loadmat(self._anno_file)['list_action']
-        class_id = [idx for idx, action in enumerate(list_action) 
-                    if action[0][0][0] == obj_name]
-        assert(class_id)
-        self._classes = [str(list_action[id][0][1][0]) for id in class_id]
-        self._classes = tuple(self.classes)
+        if obj_id == '00':
+            assert(obj_name == 'all')
+            assert(not self._ko_train)
+            assert(not self._samp_neg)
+            class_id = range(len(list_action))
+            # self._classes not set
+        else:
+            class_id = [idx for idx, action in enumerate(list_action) 
+                        if action[0][0][0] == obj_name]
+            assert(class_id)
+            self._classes = [str(list_action[id][0][1][0]) for id in class_id]
+            self._classes = tuple(self.classes)        
         # Load image list and annotation
         assert(image_set == 'train2015' or image_set == 'test2015')
         if image_set == 'train2015':
@@ -166,6 +173,9 @@ class hico(datasets.imdb):
             elif self._ko_train and self._samp_neg and self._image_set == 'train2015':
                 cache_file = os.path.join(self._cache_root,
                                           self.name + '_det_caffenet_roidb_ko_svb.pkl')
+            elif self._obj_id == '00':
+                cache_file = os.path.join(self._cache_root,
+                                          self.name + '_det_caffenet_roidb_single_net.pkl')
             else:
                 cache_file = os.path.join(self._cache_root,
                                           self.name + '_det_caffenet_roidb.pkl')
@@ -226,9 +236,15 @@ class hico(datasets.imdb):
             labels_vb = None
 
         # Read boxes
-        boxes_o, scores_o = self._get_det_one_object(res, obj_id)
+        if obj_id == '00':
+            boxes_o = None
+            scores_o = None
+        else:
+            boxes_o, scores_o = self._get_det_one_object(res, obj_id)
+            print boxes_o.shape, scores_o.shape,
         boxes_h, scores_h = self._get_det_one_object(res, hmn_id)
-        print boxes_o.shape, scores_o.shape, boxes_h.shape, scores_h.shape
+        # print boxes_o.shape, scores_o.shape, boxes_h.shape, scores_h.shape
+        print boxes_h.shape, scores_h.shape
         # im = cv2.imread(self.image_path_from_index(index))
         # for ind in xrange(10):
         #     savefile = 'test_o%d.jpg' % ind

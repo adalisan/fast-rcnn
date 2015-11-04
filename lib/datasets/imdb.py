@@ -130,9 +130,12 @@ class imdb(object):
                     entry['scores'] = self.roidb[i]['scores']
                 if c2:
                     # TODO: add scores
-                    boxes_o = self.roidb[i]['boxes_o'].copy()
+                    if  self.roidb[i]['boxes_o'] is None:
+                        boxes_o = None
+                    else:
+                        boxes_o = self.roidb[i]['boxes_o'].copy()
+                        boxes_o = self.flip_boxes(boxes_o, widths[i])
                     boxes_h = self.roidb[i]['boxes_h'].copy()
-                    boxes_o = self.flip_boxes(boxes_o, widths[i])
                     boxes_h = self.flip_boxes(boxes_h, widths[i])
                     entry['boxes_o'] = boxes_o
                     entry['boxes_h'] = boxes_h

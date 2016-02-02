@@ -208,7 +208,7 @@ if __name__ == '__main__':
 
     for i in xrange(sid-1, eid):
         # set directories
-        if i <= lsim_tr.size:
+        if i < lsim_tr.size:
             image_set = 'train2015'
         else:
             image_set = 'test2015'

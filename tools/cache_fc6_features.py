@@ -68,11 +68,11 @@ def parse_args():
     parser.add_argument('--sid', type=int, required=True)
     parser.add_argument('--eid', type=int, required=True)
 
-    # if len(sys.argv) == 1:
-    #     parser.print_help()
-    #     sys.exit(1)
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit(1)
     # args = parser.parse_args('--gpu 1 \
-    #                           --top_k 100 \
+    #                           --top_k 5 \
     #                           --sid 1 \
     #                           --eid 47774'.split())
     args = parser.parse_args()
@@ -168,6 +168,22 @@ def _get_det_one_object(res, obj_id, nms_on=True):
     # return
     return boxes, scores
 
+# def _get_pair_union_boxes(boxes_h, boxes_o):
+#     num_boxes_p = boxes_h.shape[0] * boxes_o.shape[0];
+#     boxes = np.zeros((num_boxes_p, 4), dtype=np.uint16)
+#     for m, box_h in enumerate(boxes_h):
+#         for n, box_o in enumerate(boxes_o):
+#             ind = m * boxes_h.shape[0] + n
+#             boxes[ind, 0] = np.minimum(box_h[0], box_o[0])
+#             boxes[ind, 1] = np.minimum(box_h[1], box_o[1])
+#             boxes[ind, 2] = np.maximum(box_h[2], box_o[2])
+#             boxes[ind, 3] = np.maximum(box_h[3], box_o[3])
+#             cc, rr = np.meshgrid(np.arange(boxes_o.shape[0]),
+#                                  np.arange(boxes_h.shape[0]))
+#             sub = np.hstack((np.reshape(rr, (num_boxes_p, -1)),
+#                              np.reshape(cc, (num_boxes_p, -1))))
+#     return boxes, sub
+
 
 if __name__ == '__main__':
     args = parse_args()
@@ -187,15 +203,23 @@ if __name__ == '__main__':
     eid = args.eid
 
     # set output path
-    feat_base = './caches/cache' + \
-                '_' + blob_name_op_reg + \
-                '_' + '{:04d}'.format(top_k) + \
-                '/'
+    feat_base_reg = './caches/cache_reg' + \
+                    '_' + blob_name_op_reg + \
+                    '_' + '{:04d}'.format(top_k) + \
+                    '/'
+    feat_base_ctx = './caches/cache_ctx' + \
+                    '_' + blob_name_op_ctx + \
+                    '_' + '{:04d}'.format(top_k) + \
+                    '/'
     # make directories
-    if not os.path.exists(feat_base + 'train2015'):
-         os.makedirs(feat_base + 'train2015')
-    if not os.path.exists(feat_base + 'test2015'):
-         os.makedirs(feat_base + 'test2015')
+    if not os.path.exists(feat_base_reg + 'train2015'):
+         os.makedirs(feat_base_reg + 'train2015')
+    if not os.path.exists(feat_base_reg + 'test2015'):
+         os.makedirs(feat_base_reg + 'test2015')
+    if not os.path.exists(feat_base_ctx + 'train2015'):
+         os.makedirs(feat_base_ctx + 'train2015')
+    if not os.path.exists(feat_base_ctx + 'test2015'):
+         os.makedirs(feat_base_ctx + 'test2015')
 
     # load images
     lsim_tr = sio.loadmat(anno_file)['list_train']
@@ -231,18 +255,20 @@ if __name__ == '__main__':
             image_set = 'test2015'
         im_dir = im_base + image_set
         det_dir = det_base + image_set
-        feat_dir = feat_base + image_set
+        feat_dir_reg = feat_base_reg + image_set
+        feat_dir_ctx = feat_base_ctx + image_set
 
         # get file names
         im_file = os.path.join(im_dir, image_index[i]);
         im_name = os.path.splitext(os.path.basename(im_file))[0]
         det_file = os.path.join(det_dir, im_name + '.mat')
-        feat_file = os.path.join(feat_dir, im_name + '.mat')
+        feat_file_reg = os.path.join(feat_dir_reg, im_name + '.mat')
+        feat_file_ctx = os.path.join(feat_dir_ctx, im_name + '.mat')
         print '{:05d}/{:05d} {}'.format(i - sid + 2, eid - sid + 1, 
                                         im_name + '.jpg'),
 
         # skip if feature file exists
-        if os.path.isfile(feat_file):
+        if os.path.isfile(feat_file_reg) and os.path.isfile(feat_file_ctx):
             print '\n',
             continue
 
@@ -268,9 +294,9 @@ if __name__ == '__main__':
         net_ftv_reg.blobs[blob_name_ip].reshape(*(blobs[blob_name_ip].shape))
         blobs_out = net_ftv_reg.forward(**(blobs))
         feat_full_ftv = np.copy(blobs_out[blob_name_op_reg])
-        _t['full'].tic()
+        _t['full'].toc()
 
-        # detection reg feature
+        # detection feature
         _t['det'].tic()
         assert os.path.exists(det_file), \
                'Detection file not found at: {}'.format(det_file)
@@ -279,6 +305,14 @@ if __name__ == '__main__':
                'Incorrect number of classes in {}'.format(det_file)
         feat_det_pre_reg = np.empty(num_classes, dtype=object)
         feat_det_pre_ctx = np.empty(num_classes, dtype=object)
+        # feat_pair_pre_reg = np.empty(num_classes, dtype=object)
+        # sub_pair = np.empty(num_classes, dtype=object)
+        # # get person detection boxes for pairwise feature
+        # nms_on = True
+        # boxes_h, _ = _get_det_one_object(res, 1, nms_on)
+        # # limit the number of boxes
+        # if boxes_h.shape[0] > top_k:
+        #     boxes_h = boxes_h[0:top_k,:]
         # exclude background class: start index from 1
         for j in xrange(1, num_classes+1):
             # get detection boxes
@@ -297,15 +331,27 @@ if __name__ == '__main__':
             net_pre_ctx.blobs[blob_name_ip].reshape(*(blobs[blob_name_ip].shape))
             blobs_out = net_pre_ctx.forward(**(blobs))
             feat_det_pre_ctx[j-1] = np.copy(blobs_out[blob_name_op_ctx])
+            # # get pair union boxes
+            # boxes_p, sub_pair = _get_pair_union_boxes(boxes_h, boxes)
+            # # extract pairwise feature with reg
+            # blobs = _get_blobs(im, boxes_p, 'reg')
+            # net_pre_reg.blobs[blob_name_ip].reshape(*(blobs[blob_name_ip].shape))
+            # blobs_out = net_pre_reg.forward(**(blobs))
+            # feat_pair_pre_reg[j-1] = np.copy(blobs_out[blob_name_op_reg])
         _t['det'].toc()
 
         # save output
-        sio.savemat(feat_file, {'feat_full_pre' : feat_full_pre, 
-                                'feat_full_fto' : feat_full_fto,
-                                'feat_full_ftv' : feat_full_ftv,
-                                'feat_det_pre_reg' : feat_det_pre_reg,
-                                'feat_det_pre_ctx' : feat_det_pre_ctx})
-        
+        if not os.path.isfile(feat_file_reg):
+            sio.savemat(feat_file_reg, {'feat_full_pre' : feat_full_pre, 
+                                        'feat_full_fto' : feat_full_fto,
+                                        'feat_full_ftv' : feat_full_ftv,
+                                        'feat_det_pre_reg' : feat_det_pre_reg})
+        if not os.path.isfile(feat_file_ctx):
+            sio.savemat(feat_file_ctx, {'feat_full_pre' : feat_full_pre, 
+                                        'feat_full_fto' : feat_full_fto,
+                                        'feat_full_ftv' : feat_full_ftv,
+                                        'feat_det_pre_ctx' : feat_det_pre_ctx})
+
         _t['total'].toc()
         print 'full: {:.3f}s det: {:.3f}s total: {:.3f}s' \
               .format(_t['full'].average_time, _t['det'].average_time, 

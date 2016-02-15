@@ -16,7 +16,6 @@ import cv2
 # sid = 1;
 # eid = 47774;
 
-num_classes = 80
 blob_name_ip = 'data'
 blob_name_op_reg = 'fc6'
 blob_name_op_ctx = 'pool6'
@@ -35,6 +34,11 @@ model_pre_reg = './external/fast-rcnn/data/imagenet_models/CaffeNet.v2.caffemode
 model_fto_reg = './data/data/finetuned_models/caffenet_train_object_single_iter_50000.caffemodel'
 model_ftv_reg = './data/data/finetuned_models/caffenet_train_verb_single_iter_50000.caffemodel'
 model_pre_ctx = './data/data/imagenet_models/CaffeNet.v2.conv.caffemodel'
+
+det_file = './caches/det_base_caffenet/train2015/HICO_train2015_00000001.mat'
+res = sio.loadmat(det_file)
+cls = res['cls']
+num_classes = cls.shape[1]-1
 
 
 def parse_args():
@@ -217,6 +221,7 @@ def _get_det_feat(im_raw, res, top_k, net_pre_reg, net_pre_ctx, is_flip):
     # initialize feat
     feat_det_pre_reg = np.empty(num_classes, dtype=object)
     feat_det_pre_ctx = np.empty(num_classes, dtype=object)
+    boxes_det = np.empty(num_classes, dtype=object)
     # feat_pair_pre_reg = np.empty(num_classes, dtype=object)
     # sub_pair = np.empty(num_classes, dtype=object)
     # # get person detection boxes for pairwise feature
@@ -227,6 +232,8 @@ def _get_det_feat(im_raw, res, top_k, net_pre_reg, net_pre_ctx, is_flip):
     #     boxes_h = boxes_h[0:top_k,:]
     # exclude background class: start index from 1
     for j in xrange(1, num_classes+1):
+        # assertion
+        assert(res['cls'][0, j][0] == cls[0, j][0])
         # get detection boxes
         nms_on = True
         boxes, _ = _get_det_one_object(res, j, nms_on)
@@ -246,6 +253,8 @@ def _get_det_feat(im_raw, res, top_k, net_pre_reg, net_pre_ctx, is_flip):
         net_pre_ctx.blobs[blob_name_ip].reshape(*(blobs[blob_name_ip].shape))
         blobs_out = net_pre_ctx.forward(**(blobs))
         feat_det_pre_ctx[j-1] = np.copy(blobs_out[blob_name_op_ctx])
+        # save boxes
+        boxes_det[j-1] = boxes
         # # get pair union boxes
         # boxes_p, sub_pair = _get_pair_union_boxes(boxes_h, boxes)
         # # extract pairwise feature with reg
@@ -254,7 +263,7 @@ def _get_det_feat(im_raw, res, top_k, net_pre_reg, net_pre_ctx, is_flip):
         # blobs_out = net_pre_reg.forward(**(blobs))
         # feat_pair_pre_reg[j-1] = np.copy(blobs_out[blob_name_op_reg])
     # return
-    return feat_det_pre_reg, feat_det_pre_ctx
+    return feat_det_pre_reg, feat_det_pre_ctx, boxes_det
 
 # flip boxes
 def flip_boxes(boxes, width):
@@ -294,14 +303,18 @@ if __name__ == '__main__':
                     '/'
 
     # make directories
-    if not os.path.exists(feat_base_reg + 'train2015'):
-         os.makedirs(feat_base_reg + 'train2015')
-    if not os.path.exists(feat_base_reg + 'test2015'):
-         os.makedirs(feat_base_reg + 'test2015')
-    if not os.path.exists(feat_base_ctx + 'train2015'):
-         os.makedirs(feat_base_ctx + 'train2015')
-    if not os.path.exists(feat_base_ctx + 'test2015'):
-         os.makedirs(feat_base_ctx + 'test2015')
+    for j in xrange(1, num_classes+1):
+        base_name = '{:02d}_{:s}'.format(j, cls[0, j][0])
+        feat_base_reg_j = feat_base_reg + base_name + '/'
+        feat_base_ctx_j = feat_base_ctx + base_name + '/'
+        if not os.path.exists(feat_base_reg_j + 'train2015'):
+            os.makedirs(feat_base_reg_j + 'train2015')
+        if not os.path.exists(feat_base_reg_j + 'test2015'):
+            os.makedirs(feat_base_reg_j + 'test2015')
+        if not os.path.exists(feat_base_ctx_j + 'train2015'):
+            os.makedirs(feat_base_ctx_j + 'train2015')
+        if not os.path.exists(feat_base_ctx_j + 'test2015'):
+            os.makedirs(feat_base_ctx_j + 'test2015')
 
     # load images
     lsim_tr = sio.loadmat(anno_file)['list_train']
@@ -337,22 +350,33 @@ if __name__ == '__main__':
             image_set = 'test2015'
         im_dir = im_base + image_set
         det_dir = det_base + image_set
-        feat_dir_reg = feat_base_reg + image_set
-        feat_dir_ctx = feat_base_ctx + image_set
 
         # get file names
         im_file = os.path.join(im_dir, image_index[i]);
         im_name = os.path.splitext(os.path.basename(im_file))[0]
         det_file = os.path.join(det_dir, im_name + '.mat')
-        feat_file_reg = os.path.join(feat_dir_reg, im_name + '.mat')
-        feat_file_ctx = os.path.join(feat_dir_ctx, im_name + '.mat')
-        feat_file_reg_flip = os.path.join(feat_dir_reg, im_name + '_flip.mat')
-        feat_file_ctx_flip = os.path.join(feat_dir_ctx, im_name + '_flip.mat')
         print '{:05d}/{:05d} {}'.format(i - sid + 2, eid - sid + 1, 
                                         im_name + '.jpg'),
 
         # skip if feature file exists
-        if os.path.isfile(feat_file_reg) and os.path.isfile(feat_file_ctx):
+        flag_pass = True
+        for j in xrange(1, num_classes+1):
+            # get feat base
+            base_name = '{:02d}_{:s}'.format(j, cls[0, j][0])
+            feat_dir_reg = feat_base_reg + base_name + '/' + image_set
+            feat_dir_ctx = feat_base_ctx + base_name + '/' + image_set
+            # get feat files
+            feat_file_reg = os.path.join(feat_dir_reg, im_name + '.mat')
+            feat_file_ctx = os.path.join(feat_dir_ctx, im_name + '.mat')
+            feat_file_reg_flip = os.path.join(feat_dir_reg, im_name + '_flip.mat')
+            feat_file_ctx_flip = os.path.join(feat_dir_ctx, im_name + '_flip.mat')
+            # update flag_pass
+            flag_pass = flag_pass \
+                and os.path.isfile(feat_file_reg) \
+                and os.path.isfile(feat_file_ctx) \
+                and os.path.isfile(feat_file_reg_flip) \
+                and os.path.isfile(feat_file_ctx_flip)
+        if flag_pass:
             print '\n',
             continue
 
@@ -375,33 +399,52 @@ if __name__ == '__main__':
         res = sio.loadmat(det_file)
         assert res['dets'].shape[1] == num_classes+1, \
                'Incorrect number of classes in {}'.format(det_file)
-        feat_det_pre_reg, feat_det_pre_ctx = \
+        feat_det_pre_reg, feat_det_pre_ctx, boxes_det = \
             _get_det_feat(im, res, top_k, net_pre_reg, net_pre_ctx, False)
-        feat_det_pre_reg_flip, feat_det_pre_ctx_flip = \
+        feat_det_pre_reg_flip, feat_det_pre_ctx_flip, boxes_det_flip = \
             _get_det_feat(im, res, top_k, net_pre_reg, net_pre_ctx, True)
         _t['det'].toc()
 
         # save output
-        if not os.path.isfile(feat_file_reg):
-            sio.savemat(feat_file_reg, {'feat_full_pre' : feat_full_pre,
-                                        'feat_full_fto' : feat_full_fto,
-                                        'feat_full_ftv' : feat_full_ftv,
-                                        'feat_det_pre_reg' : feat_det_pre_reg})
-        if not os.path.isfile(feat_file_ctx):
-            sio.savemat(feat_file_ctx, {'feat_full_pre' : feat_full_pre,
-                                        'feat_full_fto' : feat_full_fto,
-                                        'feat_full_ftv' : feat_full_ftv,
-                                        'feat_det_pre_ctx' : feat_det_pre_ctx})
-        if not os.path.isfile(feat_file_reg_flip):
-            sio.savemat(feat_file_reg_flip, {'feat_full_pre' : feat_full_pre_flip,
-                                             'feat_full_fto' : feat_full_fto_flip,
-                                             'feat_full_ftv' : feat_full_ftv_flip,
-                                             'feat_det_pre_reg' : feat_det_pre_reg_flip})
-        if not os.path.isfile(feat_file_ctx_flip):
-            sio.savemat(feat_file_ctx_flip, {'feat_full_pre' : feat_full_pre_flip,
-                                             'feat_full_fto' : feat_full_fto_flip,
-                                             'feat_full_ftv' : feat_full_ftv_flip,
-                                             'feat_det_pre_ctx' : feat_det_pre_ctx_flip})
+        for j in xrange(1, num_classes+1):
+            # get feat base
+            base_name = '{:02d}_{:s}'.format(j, cls[0, j][0])
+            feat_dir_reg = feat_base_reg + base_name + '/' + image_set
+            feat_dir_ctx = feat_base_ctx + base_name + '/' + image_set
+            # get feat files
+            feat_file_reg = os.path.join(feat_dir_reg, im_name + '.mat')
+            feat_file_ctx = os.path.join(feat_dir_ctx, im_name + '.mat')
+            feat_file_reg_flip = os.path.join(feat_dir_reg, im_name + '_flip.mat')
+            feat_file_ctx_flip = os.path.join(feat_dir_ctx, im_name + '_flip.mat')
+            # save files
+            if not os.path.isfile(feat_file_reg):
+                sio.savemat(feat_file_reg, {
+                    'feat_full_pre' : feat_full_pre,
+                    'feat_full_fto' : feat_full_fto,
+                    'feat_full_ftv' : feat_full_ftv,
+                    'feat_det_pre_reg' : feat_det_pre_reg[j-1],
+                    'boxes_det' : boxes_det[j-1]})
+            if not os.path.isfile(feat_file_ctx):
+                sio.savemat(feat_file_ctx, {
+                    'feat_full_pre' : feat_full_pre,
+                    'feat_full_fto' : feat_full_fto,
+                    'feat_full_ftv' : feat_full_ftv,
+                    'feat_det_pre_ctx' : feat_det_pre_ctx[j-1],
+                    'boxes_det' : boxes_det[j-1]})
+            if not os.path.isfile(feat_file_reg_flip):
+                sio.savemat(feat_file_reg_flip, {
+                    'feat_full_pre' : feat_full_pre_flip,
+                    'feat_full_fto' : feat_full_fto_flip,
+                    'feat_full_ftv' : feat_full_ftv_flip,
+                    'feat_det_pre_reg' : feat_det_pre_reg_flip[j-1],
+                    'boxes_det' : boxes_det_flip[j-1]})
+            if not os.path.isfile(feat_file_ctx_flip):
+                sio.savemat(feat_file_ctx_flip, {
+                    'feat_full_pre' : feat_full_pre_flip,
+                    'feat_full_fto' : feat_full_fto_flip,
+                    'feat_full_ftv' : feat_full_ftv_flip,
+                    'feat_det_pre_ctx' : feat_det_pre_ctx_flip[j-1],
+                    'boxes_det' : boxes_det_flip[j-1]})
 
         _t['total'].toc()
         print 'full: {:.3f}s det: {:.3f}s total: {:.3f}s' \

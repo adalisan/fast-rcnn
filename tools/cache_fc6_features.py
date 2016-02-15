@@ -184,6 +184,87 @@ def _get_det_one_object(res, obj_id, nms_on=True):
 #                              np.reshape(cc, (num_boxes_p, -1))))
 #     return boxes, sub
 
+def _get_full_im_feat(im_raw, net_pre_reg, net_fto_reg, net_ftv_reg, is_flip):
+    if is_flip:
+        im = im_raw[:, ::-1, :]
+    else:
+        im = im_raw
+    h_ori = im.shape[0]
+    w_ori = im.shape[1]
+    box_f = np.array((0,0,w_ori-1,h_ori-1), dtype='uint16')
+    blobs = {blob_name_ip : _get_one_blob(im, box_f, w_reg, h_reg)[None, :]}
+    # extract feature with ImageNet model
+    net_pre_reg.blobs[blob_name_ip].reshape(*(blobs[blob_name_ip].shape))
+    blobs_out = net_pre_reg.forward(**(blobs))
+    feat_full_pre = np.copy(blobs_out[blob_name_op_reg])
+    # extract feature with finetuned O model
+    net_fto_reg.blobs[blob_name_ip].reshape(*(blobs[blob_name_ip].shape))
+    blobs_out = net_fto_reg.forward(**(blobs))
+    feat_full_fto = np.copy(blobs_out[blob_name_op_reg])
+    # extract feature with finetuned V model
+    net_ftv_reg.blobs[blob_name_ip].reshape(*(blobs[blob_name_ip].shape))
+    blobs_out = net_ftv_reg.forward(**(blobs))
+    feat_full_ftv = np.copy(blobs_out[blob_name_op_reg])
+    # return
+    return feat_full_pre, feat_full_fto, feat_full_ftv
+
+def _get_det_feat(im_raw, res, top_k, net_pre_reg, net_pre_ctx, is_flip):
+    if is_flip:
+        im = im_raw[:, ::-1, :]
+    else:
+        im = im_raw
+    w_ori = im.shape[1]
+    # initialize feat
+    feat_det_pre_reg = np.empty(num_classes, dtype=object)
+    feat_det_pre_ctx = np.empty(num_classes, dtype=object)
+    # feat_pair_pre_reg = np.empty(num_classes, dtype=object)
+    # sub_pair = np.empty(num_classes, dtype=object)
+    # # get person detection boxes for pairwise feature
+    # nms_on = True
+    # boxes_h, _ = _get_det_one_object(res, 1, nms_on)
+    # # limit the number of boxes
+    # if boxes_h.shape[0] > top_k:
+    #     boxes_h = boxes_h[0:top_k,:]
+    # exclude background class: start index from 1
+    for j in xrange(1, num_classes+1):
+        # get detection boxes
+        nms_on = True
+        boxes, _ = _get_det_one_object(res, j, nms_on)
+        # limit the number of boxes
+        if boxes.shape[0] > top_k:
+            boxes = boxes[0:top_k,:]
+        # flip box
+        if is_flip:
+            boxes = flip_boxes(boxes, w_ori)
+        # extract feature with reg
+        blobs = _get_blobs(im, boxes, 'reg')
+        net_pre_reg.blobs[blob_name_ip].reshape(*(blobs[blob_name_ip].shape))
+        blobs_out = net_pre_reg.forward(**(blobs))
+        feat_det_pre_reg[j-1] = np.copy(blobs_out[blob_name_op_reg])
+        # extract feature with ctx
+        blobs = _get_blobs(im, boxes, 'ctx')
+        net_pre_ctx.blobs[blob_name_ip].reshape(*(blobs[blob_name_ip].shape))
+        blobs_out = net_pre_ctx.forward(**(blobs))
+        feat_det_pre_ctx[j-1] = np.copy(blobs_out[blob_name_op_ctx])
+        # # get pair union boxes
+        # boxes_p, sub_pair = _get_pair_union_boxes(boxes_h, boxes)
+        # # extract pairwise feature with reg
+        # blobs = _get_blobs(im, boxes_p, 'reg')
+        # net_pre_reg.blobs[blob_name_ip].reshape(*(blobs[blob_name_ip].shape))
+        # blobs_out = net_pre_reg.forward(**(blobs))
+        # feat_pair_pre_reg[j-1] = np.copy(blobs_out[blob_name_op_reg])
+    # return
+    return feat_det_pre_reg, feat_det_pre_ctx
+
+# flip boxes
+def flip_boxes(boxes, width):
+    oldx1 = boxes[:, 0].copy()
+    oldx2 = boxes[:, 2].copy()
+    boxes[:, 0] = width - oldx2 - 1
+    boxes[:, 2] = width - oldx1 - 1
+    assert (boxes[:, 2] >= boxes[:, 0]).all()
+    return boxes
+
 
 if __name__ == '__main__':
     args = parse_args()
@@ -211,6 +292,7 @@ if __name__ == '__main__':
                     '_' + blob_name_op_ctx + \
                     '_' + '{:04d}'.format(top_k) + \
                     '/'
+
     # make directories
     if not os.path.exists(feat_base_reg + 'train2015'):
          os.makedirs(feat_base_reg + 'train2015')
@@ -264,6 +346,8 @@ if __name__ == '__main__':
         det_file = os.path.join(det_dir, im_name + '.mat')
         feat_file_reg = os.path.join(feat_dir_reg, im_name + '.mat')
         feat_file_ctx = os.path.join(feat_dir_ctx, im_name + '.mat')
+        feat_file_reg_flip = os.path.join(feat_dir_reg, im_name + '_flip.mat')
+        feat_file_ctx_flip = os.path.join(feat_dir_ctx, im_name + '_flip.mat')
         print '{:05d}/{:05d} {}'.format(i - sid + 2, eid - sid + 1, 
                                         im_name + '.jpg'),
 
@@ -278,22 +362,10 @@ if __name__ == '__main__':
 
         # full image feature
         _t['full'].tic()
-        h_ori = im.shape[0]
-        w_ori = im.shape[1]
-        box_f = np.array((0,0,w_ori-1,h_ori-1), dtype='uint16')
-        blobs = {blob_name_ip : _get_one_blob(im, box_f, w_reg, h_reg)[None, :]}
-        # extract feature with ImageNet model
-        net_pre_reg.blobs[blob_name_ip].reshape(*(blobs[blob_name_ip].shape))
-        blobs_out = net_pre_reg.forward(**(blobs))
-        feat_full_pre = np.copy(blobs_out[blob_name_op_reg])
-        # extract feature with finetuned O model
-        net_fto_reg.blobs[blob_name_ip].reshape(*(blobs[blob_name_ip].shape))
-        blobs_out = net_fto_reg.forward(**(blobs))
-        feat_full_fto = np.copy(blobs_out[blob_name_op_reg])
-        # extract feature with finetuned V model
-        net_ftv_reg.blobs[blob_name_ip].reshape(*(blobs[blob_name_ip].shape))
-        blobs_out = net_ftv_reg.forward(**(blobs))
-        feat_full_ftv = np.copy(blobs_out[blob_name_op_reg])
+        feat_full_pre, feat_full_fto, feat_full_ftv = \
+            _get_full_im_feat(im, net_pre_reg, net_fto_reg, net_ftv_reg, False)
+        feat_full_pre_flip, feat_full_fto_flip, feat_full_ftv_flip = \
+            _get_full_im_feat(im, net_pre_reg, net_fto_reg, net_ftv_reg, True)
         _t['full'].toc()
 
         # detection feature
@@ -303,54 +375,33 @@ if __name__ == '__main__':
         res = sio.loadmat(det_file)
         assert res['dets'].shape[1] == num_classes+1, \
                'Incorrect number of classes in {}'.format(det_file)
-        feat_det_pre_reg = np.empty(num_classes, dtype=object)
-        feat_det_pre_ctx = np.empty(num_classes, dtype=object)
-        # feat_pair_pre_reg = np.empty(num_classes, dtype=object)
-        # sub_pair = np.empty(num_classes, dtype=object)
-        # # get person detection boxes for pairwise feature
-        # nms_on = True
-        # boxes_h, _ = _get_det_one_object(res, 1, nms_on)
-        # # limit the number of boxes
-        # if boxes_h.shape[0] > top_k:
-        #     boxes_h = boxes_h[0:top_k,:]
-        # exclude background class: start index from 1
-        for j in xrange(1, num_classes+1):
-            # get detection boxes
-            nms_on = True
-            boxes, _ = _get_det_one_object(res, j, nms_on)
-            # limit the number of boxes
-            if boxes.shape[0] > top_k:
-                boxes = boxes[0:top_k,:]
-            # extract feature with reg
-            blobs = _get_blobs(im, boxes, 'reg')
-            net_pre_reg.blobs[blob_name_ip].reshape(*(blobs[blob_name_ip].shape))
-            blobs_out = net_pre_reg.forward(**(blobs))
-            feat_det_pre_reg[j-1] = np.copy(blobs_out[blob_name_op_reg])
-            # extract feature with ctx
-            blobs = _get_blobs(im, boxes, 'ctx')
-            net_pre_ctx.blobs[blob_name_ip].reshape(*(blobs[blob_name_ip].shape))
-            blobs_out = net_pre_ctx.forward(**(blobs))
-            feat_det_pre_ctx[j-1] = np.copy(blobs_out[blob_name_op_ctx])
-            # # get pair union boxes
-            # boxes_p, sub_pair = _get_pair_union_boxes(boxes_h, boxes)
-            # # extract pairwise feature with reg
-            # blobs = _get_blobs(im, boxes_p, 'reg')
-            # net_pre_reg.blobs[blob_name_ip].reshape(*(blobs[blob_name_ip].shape))
-            # blobs_out = net_pre_reg.forward(**(blobs))
-            # feat_pair_pre_reg[j-1] = np.copy(blobs_out[blob_name_op_reg])
+        feat_det_pre_reg, feat_det_pre_ctx = \
+            _get_det_feat(im, res, top_k, net_pre_reg, net_pre_ctx, False)
+        feat_det_pre_reg_flip, feat_det_pre_ctx_flip = \
+            _get_det_feat(im, res, top_k, net_pre_reg, net_pre_ctx, True)
         _t['det'].toc()
 
         # save output
         if not os.path.isfile(feat_file_reg):
-            sio.savemat(feat_file_reg, {'feat_full_pre' : feat_full_pre, 
+            sio.savemat(feat_file_reg, {'feat_full_pre' : feat_full_pre,
                                         'feat_full_fto' : feat_full_fto,
                                         'feat_full_ftv' : feat_full_ftv,
                                         'feat_det_pre_reg' : feat_det_pre_reg})
         if not os.path.isfile(feat_file_ctx):
-            sio.savemat(feat_file_ctx, {'feat_full_pre' : feat_full_pre, 
+            sio.savemat(feat_file_ctx, {'feat_full_pre' : feat_full_pre,
                                         'feat_full_fto' : feat_full_fto,
                                         'feat_full_ftv' : feat_full_ftv,
                                         'feat_det_pre_ctx' : feat_det_pre_ctx})
+        if not os.path.isfile(feat_file_reg_flip):
+            sio.savemat(feat_file_reg_flip, {'feat_full_pre' : feat_full_pre_flip,
+                                             'feat_full_fto' : feat_full_fto_flip,
+                                             'feat_full_ftv' : feat_full_ftv_flip,
+                                             'feat_det_pre_reg' : feat_det_pre_reg_flip})
+        if not os.path.isfile(feat_file_ctx_flip):
+            sio.savemat(feat_file_ctx_flip, {'feat_full_pre' : feat_full_pre_flip,
+                                             'feat_full_fto' : feat_full_fto_flip,
+                                             'feat_full_ftv' : feat_full_ftv_flip,
+                                             'feat_det_pre_ctx' : feat_det_pre_ctx_flip})
 
         _t['total'].toc()
         print 'full: {:.3f}s det: {:.3f}s total: {:.3f}s' \

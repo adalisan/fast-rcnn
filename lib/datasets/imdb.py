@@ -120,8 +120,18 @@ class imdb(object):
                              'label_vb' : self.roidb[i]['label_vb'],
                              'flipped' : True}
                 else:
+                    reg_base_o = self.roidb[i]['reg_file_o']
+                    ctx_base_o = self.roidb[i]['ctx_file_o']
+                    reg_file_o = os.path.splitext(reg_base_o)[0] + '_flip.mat'
+                    ctx_file_o = os.path.splitext(ctx_base_o)[0] + '_flip.mat'
+                    reg_base_h = self.roidb[i]['reg_file_h']
+                    ctx_base_h = self.roidb[i]['ctx_file_h']
+                    reg_file_h = os.path.splitext(reg_base_h)[0] + '_flip.mat'
+                    ctx_file_h = os.path.splitext(ctx_base_h)[0] + '_flip.mat'
                     entry = {'label' : self.roidb[i]['label'],
                              'label_vb' : self.roidb[i]['label_vb'],
+                             'reg_file_o' : reg_file_o, 'ctx_file_o' : ctx_file_o,
+                             'reg_file_h' : reg_file_h, 'ctx_file_h' : ctx_file_h,
                              'flipped' : True}
                 if c1:
                     boxes = self.roidb[i]['boxes'].copy()

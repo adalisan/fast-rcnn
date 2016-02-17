@@ -257,9 +257,30 @@ class hico(datasets.imdb):
         #         bbox = boxes_h[ind,:]
         #         im_focus = im[bbox[1]:bbox[3], bbox[0]:bbox[2]]
         #         cv2.imwrite(savefile,im_focus)
+
+        # Set cached feature files
+        reg_file_o = 'caches/cache_reg_fc6_0010/' + \
+                     self._obj_id + '_' + self._obj_name + '/' + \
+                     self._image_set + '/' + \
+                     os.path.splitext(index)[0] + '.mat'
+        ctx_file_o = 'caches/cache_ctx_pool6_0010/' + \
+                     self._obj_id + '_' + self._obj_name + '/' + \
+                     self._image_set + '/' + \
+                     os.path.splitext(index)[0] + '.mat'
+        reg_file_h = 'caches/cache_reg_fc6_0010/' + \
+                     '{:02d}'.format(hmn_id) + '_person/' + \
+                     self._image_set + '/' + \
+                     os.path.splitext(index)[0] + '.mat'
+        ctx_file_h = 'caches/cache_ctx_pool6_0010/' + \
+                     '{:02d}'.format(hmn_id) + '_person/' + \
+                     self._image_set + '/' + \
+                     os.path.splitext(index)[0] + '.mat'
+
         return {'boxes_o' : boxes_o, 'scores_o' : scores_o, 
                 'boxes_h' : boxes_h, 'scores_h' : scores_h,
                 'label' : labels, 'label_vb' : labels_vb,
+                'reg_file_o' : reg_file_o, 'ctx_file_o' : ctx_file_o,
+                'reg_file_h' : reg_file_h, 'ctx_file_h' : ctx_file_h,
                 'flipped' : False}
 
     # get boxes for object object with nms

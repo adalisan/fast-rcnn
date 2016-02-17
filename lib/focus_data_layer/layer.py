@@ -55,6 +55,7 @@ class FocusDataLayer(caffe.Layer):
     def _shuffle_roidb_inds(self):
         """Randomly permute the training roidb."""
         self._perm = np.random.permutation(np.arange(len(self._roidb)))
+        # self._perm = np.arange(len(self._roidb))
         self._cur = 0
 
     def _get_next_minibatch_inds(self):
@@ -147,49 +148,75 @@ class FocusDataLayer(caffe.Layer):
         
         self._name_to_top_map = {}
     
-        # data blob: holds a batch of N image tuples, each tuple contains
-        # K cropped windows with 3 channels.
-        if cfg.FLAG_HO:
-            # TODO: add feat4
-            if cfg.FLAG_CTX8:
-                LEN_H = cfg.FOCUS_LEN_HO
-                LEN_W = cfg.FOCUS_LEN_HO
-            else:
-                LEN_H = cfg.FOCUS_H
-                LEN_W = cfg.FOCUS_W
+        if cfg.USE_CACHE:
+            assert(cfg.FLAG_HO)
             for ind in xrange(0,cfg.OBJ_K):
-                key = 'data_o%d' % (ind+1)
                 tind = ind
-                self._name_to_top_map[key] = tind
-                top[tind].reshape(1, 3, LEN_H, LEN_W)
-            for ind in xrange(0,cfg.HMN_K):
-                key = 'data_h%d' % (ind+1)
-                tind = ind + cfg.OBJ_K
-                self._name_to_top_map[key] = tind
-                top[tind].reshape(1, 3, LEN_H, LEN_W)
-        else:
-            # TODO: add ctx8
-            for ind in xrange(0,cfg.TOP_K):
-                if cfg.FEAT_TYPE == 4:
-                    for i, s in enumerate(['l','t','r','b']):
-                        # change _name_to_top_map
-                        key = 'data_%d_%s' % (ind+1,s)
-                        self._name_to_top_map[key] = ind*4+i
-                        # reshape
-                        top[ind*4+i].reshape(1, 3, cfg.FOCUS_H, cfg.FOCUS_W)
+                if cfg.FLAG_CTX8:
+                    key = 'pool6_o%d' % (ind+1)
+                    self._name_to_top_map[key] = tind
+                    top[tind].reshape(1, 4096, 3, 3)
                 else:
-                    # Note that key starts from 1 and _name_to_top_map[key] 
-                    # starts from 0
-                    key = 'data_%d' % (ind+1)
-                    self._name_to_top_map[key] = ind
-                    # The height and width (100 x 100) are dummy values
-                    top[ind].reshape(1, 3, cfg.FOCUS_H, cfg.FOCUS_W)
-
-        # full image feature
-        if cfg.FLAG_FULLIM:
-            ind = len(self._name_to_top_map.keys())
-            self._name_to_top_map['data_s'] = ind
-            top[ind].reshape(1, 3, cfg.FOCUS_H, cfg.FOCUS_W)
+                    key = 'fc6_o%d' % (ind+1)
+                    self._name_to_top_map[key] = tind
+                    top[tind].reshape(1, 4096)
+            for ind in xrange(0,cfg.HMN_K):
+                tind = ind + cfg.OBJ_K
+                if cfg.FLAG_CTX8:
+                    key = 'pool6_h%d' % (ind+1)
+                    self._name_to_top_map[key] = tind
+                    top[tind].reshape(1, 4096, 3, 3)
+                else:
+                    key = 'fc6_h%d' % (ind+1)
+                    self._name_to_top_map[key] = tind
+                    top[tind].reshape(1, 4096)
+            if cfg.FLAG_FULLIM:
+                ind = len(self._name_to_top_map.keys())
+                self._name_to_top_map['fc6_s'] = ind
+                top[ind].reshape(1, 4096)
+        else:
+            # data blob: holds a batch of N image tuples, each tuple contains
+            # K cropped windows with 3 channels.
+            if cfg.FLAG_HO:
+                # TODO: add feat4
+                if cfg.FLAG_CTX8:
+                    LEN_H = cfg.FOCUS_LEN_HO
+                    LEN_W = cfg.FOCUS_LEN_HO
+                else:
+                    LEN_H = cfg.FOCUS_H
+                    LEN_W = cfg.FOCUS_W
+                for ind in xrange(0,cfg.OBJ_K):
+                    key = 'data_o%d' % (ind+1)
+                    tind = ind
+                    self._name_to_top_map[key] = tind
+                    top[tind].reshape(1, 3, LEN_H, LEN_W)
+                for ind in xrange(0,cfg.HMN_K):
+                    key = 'data_h%d' % (ind+1)
+                    tind = ind + cfg.OBJ_K
+                    self._name_to_top_map[key] = tind
+                    top[tind].reshape(1, 3, LEN_H, LEN_W)
+            else:
+                # TODO: add ctx8
+                for ind in xrange(0,cfg.TOP_K):
+                    if cfg.FEAT_TYPE == 4:
+                        for i, s in enumerate(['l','t','r','b']):
+                            # change _name_to_top_map
+                            key = 'data_%d_%s' % (ind+1,s)
+                            self._name_to_top_map[key] = ind*4+i
+                            # reshape
+                            top[ind*4+i].reshape(1, 3, cfg.FOCUS_H, cfg.FOCUS_W)
+                    else:
+                        # Note that key starts from 1 and _name_to_top_map[key] 
+                        # starts from 0
+                        key = 'data_%d' % (ind+1)
+                        self._name_to_top_map[key] = ind
+                        # The height and width (100 x 100) are dummy values
+                        top[ind].reshape(1, 3, cfg.FOCUS_H, cfg.FOCUS_W)
+            # full image feature
+            if cfg.FLAG_FULLIM:
+                ind = len(self._name_to_top_map.keys())
+                self._name_to_top_map['data_s'] = ind
+                top[ind].reshape(1, 3, cfg.FOCUS_H, cfg.FOCUS_W)
 
         # labels blob: binary categorical labels in [0, ..., K-1] for K 
         # foreground classes

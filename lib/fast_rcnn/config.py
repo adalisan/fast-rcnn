@@ -65,6 +65,14 @@ __C.FOCUS_LEN_HO = 483
 # FG OBJ FRACTION PER BATCH
 __C.FG_OBJ_FRACTION = 0.15
 
+# Use cached feature
+__C.USE_CACHE = False
+
+# Use pre-trained/fine-tuned models for scene feature. Only required for cached 
+# feature.
+# 0: pre-trained, 1: fine-tuned V, 2: fine-tuned O.
+__C.USE_FT = 0
+
 #
 # Training options
 #

@@ -13,6 +13,7 @@ import cv2
 from fast_rcnn.config import cfg
 from utils.blob import prep_im_for_blob, im_list_to_blob
 # import os
+import scipy.io as sio
 
 def get_minibatch(roidb, num_classes):
     """Given a roidb, construct a minibatch sampled from it."""
@@ -64,110 +65,169 @@ def get_minibatch(roidb, num_classes):
     else:
        ffactor = 1
        assert(cfg.FEAT_TYPE == 0)
-    if cfg.FLAG_HO:
-        # TODO: add feat4
-        # im_blobs_o = [im_blob.copy()] * cfg.OBJ_K
-        # im_blobs_h = [im_blob.copy()] * cfg.HMN_K
+
+    if cfg.USE_CACHE:
+        assert(cfg.FLAG_HO)
         if cfg.FLAG_CTX8:
-            LEN_H = cfg.FOCUS_LEN_HO
-            LEN_W = cfg.FOCUS_LEN_HO
+            im_blobs_o = [np.zeros((num_images, 4096, 3, 3), dtype=np.float32)
+                          for _ in xrange(cfg.OBJ_K)]
+            im_blobs_h = [np.zeros((num_images, 4096, 3, 3), dtype=np.float32)
+                          for _ in xrange(cfg.HMN_K)]
         else:
-            LEN_H = cfg.FOCUS_H
-            LEN_W = cfg.FOCUS_W
-        im_blobs_o = [np.zeros((num_images, 3, LEN_H, LEN_W), dtype=np.float32)
-                      for _ in xrange(cfg.OBJ_K)]
-        im_blobs_h = [np.zeros((num_images, 3, LEN_H, LEN_W), dtype=np.float32)
-                      for _ in xrange(cfg.HMN_K)]
+            im_blobs_o = [np.zeros((num_images, 4096), dtype=np.float32)
+                          for _ in xrange(cfg.OBJ_K)]
+            im_blobs_h = [np.zeros((num_images, 4096), dtype=np.float32)
+                          for _ in xrange(cfg.HMN_K)]
+        if cfg.FLAG_FULLIM:
+            im_blobs_s = np.zeros((num_images, 4096), dtype=np.float32)
     else:
-        # TODO: add ctx8
-        # im_blobs = [im_blob.copy()] * cfg.TOP_K
-        im_blobs = [np.zeros((num_images, 3, cfg.FOCUS_H, cfg.FOCUS_W), 
-                             dtype=np.float32) 
-                    for _ in xrange(cfg.TOP_K * ffactor)]
-    if cfg.FLAG_FULLIM:
-        im_blobs_s = np.zeros((num_images, 3, cfg.FOCUS_H, cfg.FOCUS_W),
-                              dtype=np.float32)
-    
-    for im_i in xrange(num_images):
-        # labels, overlaps, im_rois, bbox_targets, bbox_loss \
-        #     = _sample_rois(roidb[im_i], fg_rois_per_image, rois_per_image,
-        #                    num_classes)
-        im = cv2.imread(roidb[im_i]['image'])
-        h_org = im.shape[0]
-        w_org = im.shape[1]
-        # print roidb[im_i]['image']
-        if roidb[im_i]['flipped']:
-            im = im[:, ::-1, :]
         if cfg.FLAG_HO:
-            # TODO: add FLAG_TOP_THRESH
             # TODO: add feat4
-            for ind in xrange(cfg.OBJ_K):
-                if cfg.FLAG_CTX8:
-                    boxes_o  = roidb[im_i]['boxes_o'][ind,:]
-                    bbox_en  = _enlarge_bbox_ctx8(boxes_o, w_org, h_org)
-                    bbox_en  = np.around(bbox_en[0,:]).astype(np.uint16)
-                    im_focus = _get_one_blob(im, bbox_en,
-                                             cfg.FOCUS_LEN_HO, cfg.FOCUS_LEN_HO)
-                else:
-                    im_focus = _get_one_blob(im, roidb[im_i]['boxes_o'][ind,:])
-                    # im_focus, save_focus = _get_one_blob(im, roidb[im_i]['boxes_o'][ind,:])
-                im_blobs_o[ind][im_i, :, :, :] = im_focus
-                # savefile = 'test_i%d_o%d.jpg' % (im_i, ind)
-                # if not os.path.isfile(savefile):
-                #     cv2.imwrite(savefile,save_focus)
-            for ind in xrange(cfg.HMN_K):
-                if cfg.FLAG_CTX8:
-                    boxes_h  = roidb[im_i]['boxes_h'][ind,:]
-                    bbox_en  = _enlarge_bbox_ctx8(boxes_h, w_org, h_org)
-                    bbox_en  = np.around(bbox_en[0,:]).astype(np.uint16)
-                    im_focus = _get_one_blob(im, bbox_en,
-                                             cfg.FOCUS_LEN_HO, cfg.FOCUS_LEN_HO)
-                else:
-                    im_focus = _get_one_blob(im, roidb[im_i]['boxes_h'][ind,:])
-                    # im_focus, save_focus = _get_one_blob(im, roidb[im_i]['boxes_h'][ind,:])
-                im_blobs_h[ind][im_i, :, :, :] = im_focus
-                # savefile = 'test_i%d_h%d.jpg' % (im_i, ind)
-                # if not os.path.isfile(savefile):
-                #     cv2.imwrite(savefile,save_focus)
+            # im_blobs_o = [im_blob.copy()] * cfg.OBJ_K
+            # im_blobs_h = [im_blob.copy()] * cfg.HMN_K
+            if cfg.FLAG_CTX8:
+                LEN_H = cfg.FOCUS_LEN_HO
+                LEN_W = cfg.FOCUS_LEN_HO
+            else:
+                LEN_H = cfg.FOCUS_H
+                LEN_W = cfg.FOCUS_W
+            im_blobs_o = [np.zeros((num_images, 3, LEN_H, LEN_W), dtype=np.float32)
+                          for _ in xrange(cfg.OBJ_K)]
+            im_blobs_h = [np.zeros((num_images, 3, LEN_H, LEN_W), dtype=np.float32)
+                          for _ in xrange(cfg.HMN_K)]
         else:
             # TODO: add ctx8
-            for ind in xrange(cfg.TOP_K):
-                # Now we just take the top K detection bbox; should consider
-                # sampling K bbox from a larger pool later
-                if cfg.FLAG_TOP_THRESH:
-                    # we threshold the boxes by scores
-                    keep = np.where(roidb[im_i]['scores'] >= cfg.TOP_THRESH)
-                    if keep[0].size == 0:
-                        xid = 1
-                    else:
-                        xid = np.amax(keep[0]) + 1
-                    pid = ind % xid
-                else:
-                    pid = ind
-                # adjust boxes by feature type
-                if cfg.FEAT_TYPE == 4:
-                    box_l, box_t, box_r, box_b \
-                        = _get_4_side_bbox(roidb[im_i]['boxes'][pid,:], 
-                                           w_org, 
-                                           h_org)
-                    # round box and convert type to uint16
-                    box_l = np.around(box_l[0,:]).astype(np.uint16)
-                    box_t = np.around(box_t[0,:]).astype(np.uint16)
-                    box_r = np.around(box_r[0,:]).astype(np.uint16)
-                    box_b = np.around(box_b[0,:]).astype(np.uint16)
-                    im_blobs[ind*4+0][im_i, :, :, :] = _get_one_blob(im, box_l)
-                    im_blobs[ind*4+1][im_i, :, :, :] = _get_one_blob(im, box_t)
-                    im_blobs[ind*4+2][im_i, :, :, :] = _get_one_blob(im, box_r)
-                    im_blobs[ind*4+3][im_i, :, :, :] = _get_one_blob(im, box_b)
-                else:
-                    assert(cfg.FEAT_TYPE == 0)
-                    im_focus = _get_one_blob(im, roidb[im_i]['boxes'][pid,:])
-                    im_blobs[ind][im_i, :, :, :] = im_focus
-
-        # full image feature
+            # im_blobs = [im_blob.copy()] * cfg.TOP_K
+            im_blobs = [np.zeros((num_images, 3, cfg.FOCUS_H, cfg.FOCUS_W), 
+                                 dtype=np.float32) 
+                        for _ in xrange(cfg.TOP_K * ffactor)]
         if cfg.FLAG_FULLIM:
-            box_f = np.array((0,0,w_org-1,h_org-1),dtype='uint16')
-            im_blobs_s[im_i, :, :, :] = _get_one_blob(im, box_f)
+            im_blobs_s = np.zeros((num_images, 3, cfg.FOCUS_H, cfg.FOCUS_W),
+                                  dtype=np.float32)
+    
+    for im_i in xrange(num_images):
+        if cfg.USE_CACHE:
+            assert(cfg.FLAG_HO)
+            if cfg.FLAG_CTX8:
+                ld_o = sio.loadmat(roidb[im_i]['ctx_file_o'])
+                ld_h = sio.loadmat(roidb[im_i]['ctx_file_h'])
+                feat_det_o  = ld_o['feat_det_pre_ctx']
+                feat_det_h  = ld_h['feat_det_pre_ctx']
+                boxes_det_o = ld_o['boxes_det']
+                boxes_det_h = ld_h['boxes_det']
+            else:
+                ld_o = sio.loadmat(roidb[im_i]['reg_file_o'])
+                ld_h = sio.loadmat(roidb[im_i]['reg_file_h'])
+                feat_det_o  = ld_o['feat_det_pre_reg']
+                feat_det_h  = ld_h['feat_det_pre_reg']
+                boxes_det_o = ld_o['boxes_det']
+                boxes_det_h = ld_h['boxes_det']
+            if cfg.MODEL_SCENE == 0:
+                feat_full_o = ld_o['feat_full_pre']
+                feat_full_h = ld_h['feat_full_pre']
+            if cfg.MODEL_SCENE == 1:
+                feat_full_o = ld_o['feat_full_ftv']
+                feat_full_h = ld_h['feat_full_ftv']
+            if cfg.MODEL_SCENE == 2:
+                feat_full_o = ld_o['feat_full_fto']
+                feat_full_h = ld_h['feat_full_fto']
+            # object det feature
+            for ind in xrange(cfg.OBJ_K):
+                assert(np.all(roidb[im_i]['boxes_o'][ind,:] == boxes_det_o[ind,:]))
+                if cfg.FLAG_CTX8:
+                    im_blobs_o[ind][im_i,:,:,:] = feat_det_o[ind,:]
+                else:
+                    im_blobs_o[ind][im_i,:] = feat_det_o[ind,:]
+            # human det feature
+            for ind in xrange(cfg.HMN_K):
+                assert(np.all(roidb[im_i]['boxes_h'][ind,:] == boxes_det_h[ind,:]))
+                if cfg.FLAG_CTX8:
+                    im_blobs_h[ind][im_i,:,:,:] = feat_det_h[ind,:]
+                else:
+                    im_blobs_h[ind][im_i,:] = feat_det_h[ind,:]
+            # full image feature
+            if cfg.FLAG_FULLIM:
+                assert(np.all(feat_full_o == feat_full_h))
+                im_blobs_s[im_i,:] = feat_full_o
+        else:
+            # labels, overlaps, im_rois, bbox_targets, bbox_loss \
+            #     = _sample_rois(roidb[im_i], fg_rois_per_image, rois_per_image,
+            #                    num_classes)
+            im = cv2.imread(roidb[im_i]['image'])
+            h_org = im.shape[0]
+            w_org = im.shape[1]
+            # print roidb[im_i]['image']
+            if roidb[im_i]['flipped']:
+                im = im[:, ::-1, :]
+            if cfg.FLAG_HO:
+                # TODO: add FLAG_TOP_THRESH
+                # TODO: add feat4
+                for ind in xrange(cfg.OBJ_K):
+                    if cfg.FLAG_CTX8:
+                        boxes_o  = roidb[im_i]['boxes_o'][ind,:]
+                        bbox_en  = _enlarge_bbox_ctx8(boxes_o, w_org, h_org)
+                        bbox_en  = np.around(bbox_en[0,:]).astype(np.uint16)
+                        im_focus = _get_one_blob(im, bbox_en,
+                                                 cfg.FOCUS_LEN_HO, cfg.FOCUS_LEN_HO)
+                    else:
+                        im_focus = _get_one_blob(im, roidb[im_i]['boxes_o'][ind,:])
+                        # im_focus, save_focus = _get_one_blob(im, roidb[im_i]['boxes_o'][ind,:])
+                    im_blobs_o[ind][im_i, :, :, :] = im_focus
+                    # savefile = 'test_i%d_o%d.jpg' % (im_i, ind)
+                    # if not os.path.isfile(savefile):
+                    #     cv2.imwrite(savefile,save_focus)
+                for ind in xrange(cfg.HMN_K):
+                    if cfg.FLAG_CTX8:
+                        boxes_h  = roidb[im_i]['boxes_h'][ind,:]
+                        bbox_en  = _enlarge_bbox_ctx8(boxes_h, w_org, h_org)
+                        bbox_en  = np.around(bbox_en[0,:]).astype(np.uint16)
+                        im_focus = _get_one_blob(im, bbox_en,
+                                                 cfg.FOCUS_LEN_HO, cfg.FOCUS_LEN_HO)
+                    else:
+                        im_focus = _get_one_blob(im, roidb[im_i]['boxes_h'][ind,:])
+                        # im_focus, save_focus = _get_one_blob(im, roidb[im_i]['boxes_h'][ind,:])
+                    im_blobs_h[ind][im_i, :, :, :] = im_focus
+                    # savefile = 'test_i%d_h%d.jpg' % (im_i, ind)
+                    # if not os.path.isfile(savefile):
+                    #     cv2.imwrite(savefile,save_focus)
+            else:
+                # TODO: add ctx8
+                for ind in xrange(cfg.TOP_K):
+                    # Now we just take the top K detection bbox; should consider
+                    # sampling K bbox from a larger pool later
+                    if cfg.FLAG_TOP_THRESH:
+                        # we threshold the boxes by scores
+                        keep = np.where(roidb[im_i]['scores'] >= cfg.TOP_THRESH)
+                        if keep[0].size == 0:
+                            xid = 1
+                        else:
+                            xid = np.amax(keep[0]) + 1
+                        pid = ind % xid
+                    else:
+                        pid = ind
+                    # adjust boxes by feature type
+                    if cfg.FEAT_TYPE == 4:
+                        box_l, box_t, box_r, box_b \
+                            = _get_4_side_bbox(roidb[im_i]['boxes'][pid,:], 
+                                               w_org, 
+                                               h_org)
+                        # round box and convert type to uint16
+                        box_l = np.around(box_l[0,:]).astype(np.uint16)
+                        box_t = np.around(box_t[0,:]).astype(np.uint16)
+                        box_r = np.around(box_r[0,:]).astype(np.uint16)
+                        box_b = np.around(box_b[0,:]).astype(np.uint16)
+                        im_blobs[ind*4+0][im_i, :, :, :] = _get_one_blob(im, box_l)
+                        im_blobs[ind*4+1][im_i, :, :, :] = _get_one_blob(im, box_t)
+                        im_blobs[ind*4+2][im_i, :, :, :] = _get_one_blob(im, box_r)
+                        im_blobs[ind*4+3][im_i, :, :, :] = _get_one_blob(im, box_b)
+                    else:
+                        assert(cfg.FEAT_TYPE == 0)
+                        im_focus = _get_one_blob(im, roidb[im_i]['boxes'][pid,:])
+                        im_blobs[ind][im_i, :, :, :] = im_focus
+            # full image feature
+            if cfg.FLAG_FULLIM:
+                box_f = np.array((0,0,w_org-1,h_org-1),dtype='uint16')
+                im_blobs_s[im_i, :, :, :] = _get_one_blob(im, box_f)
 
         labels = roidb[im_i]['label']
         if cfg.FLAG_SHARE_VB:
@@ -196,25 +256,40 @@ def get_minibatch(roidb, num_classes):
     blobs = {'labels': labels_blob}
     if cfg.FLAG_SHARE_VB:
         blobs['labels_vb'] = labels_vb_blob
-    if cfg.FLAG_HO:
-        # TODO: add feat4
+    if cfg.USE_CACHE:
+        assert(cfg.FLAG_HO)
+        if cfg.FLAG_CTX8:
+            key_base = 'pool6'
+        else:
+            key_base = 'fc6'
         for ind in xrange(0,cfg.OBJ_K):
-            key = 'data_o%d' % (ind+1)
+            key = key_base + '_o%d' % (ind+1)
             blobs[key] = im_blobs_o[ind]
         for ind in xrange(0,cfg.HMN_K):
-            key = 'data_h%d' % (ind+1)
-            blobs[key] = im_blobs_h[ind]
+            key = key_base + '_h%d' % (ind+1)
+            blobs[key] = im_blobs_o[ind]
+        if cfg.FLAG_FULLIM:
+            blobs['fc6_s'] = im_blobs_s
     else:
-        for ind in xrange(0,cfg.TOP_K):
-            if cfg.FEAT_TYPE == 4:
-                for i, s in enumerate(['l','t','r','b']):
-                    key = 'data_%d_%s' % (ind+1,s)
-                    blobs[key] = im_blobs[ind*4+i]
-            else:
-                key = 'data_%d' % (ind+1)
-                blobs[key] = im_blobs[ind]
-    if cfg.FLAG_FULLIM:
-        blobs['data_s'] = im_blobs_s
+        if cfg.FLAG_HO:
+            # TODO: add feat4
+            for ind in xrange(0,cfg.OBJ_K):
+                key = 'data_o%d' % (ind+1)
+                blobs[key] = im_blobs_o[ind]
+            for ind in xrange(0,cfg.HMN_K):
+                key = 'data_h%d' % (ind+1)
+                blobs[key] = im_blobs_h[ind]
+        else:
+            for ind in xrange(0,cfg.TOP_K):
+                if cfg.FEAT_TYPE == 4:
+                    for i, s in enumerate(['l','t','r','b']):
+                        key = 'data_%d_%s' % (ind+1,s)
+                        blobs[key] = im_blobs[ind*4+i]
+                else:
+                    key = 'data_%d' % (ind+1)
+                    blobs[key] = im_blobs[ind]
+        if cfg.FLAG_FULLIM:
+            blobs['data_s'] = im_blobs_s
     # if cfg.TRAIN.BBOX_REG:
     #     blobs['bbox_targets'] = bbox_targets_blob
     #     blobs['bbox_loss_weights'] = bbox_loss_blob

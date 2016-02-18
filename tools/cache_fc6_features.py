@@ -304,7 +304,7 @@ if __name__ == '__main__':
 
     # make directories
     for j in xrange(1, num_classes+1):
-        base_name = '{:02d}_{:s}'.format(j, cls[0, j][0])
+        base_name = '{:02d}_{:s}'.format(j, cls[0, j][0].replace(' ','_'))
         feat_base_reg_j = feat_base_reg + base_name + '/'
         feat_base_ctx_j = feat_base_ctx + base_name + '/'
         if not os.path.exists(feat_base_reg_j + 'train2015'):
@@ -362,7 +362,7 @@ if __name__ == '__main__':
         flag_pass = True
         for j in xrange(1, num_classes+1):
             # get feat base
-            base_name = '{:02d}_{:s}'.format(j, cls[0, j][0])
+            base_name = '{:02d}_{:s}'.format(j, cls[0, j][0].replace(' ','_'))
             feat_dir_reg = feat_base_reg + base_name + '/' + image_set
             feat_dir_ctx = feat_base_ctx + base_name + '/' + image_set
             # get feat files
@@ -408,7 +408,7 @@ if __name__ == '__main__':
         # save output
         for j in xrange(1, num_classes+1):
             # get feat base
-            base_name = '{:02d}_{:s}'.format(j, cls[0, j][0])
+            base_name = '{:02d}_{:s}'.format(j, cls[0, j][0].replace(' ','_'))
             feat_dir_reg = feat_base_reg + base_name + '/' + image_set
             feat_dir_ctx = feat_base_ctx + base_name + '/' + image_set
             # get feat files

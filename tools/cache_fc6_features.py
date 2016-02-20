@@ -371,11 +371,16 @@ if __name__ == '__main__':
             feat_file_reg_flip = os.path.join(feat_dir_reg, im_name + '_flip.mat')
             feat_file_ctx_flip = os.path.join(feat_dir_ctx, im_name + '_flip.mat')
             # update flag_pass
-            flag_pass = flag_pass \
-                and os.path.isfile(feat_file_reg) \
-                and os.path.isfile(feat_file_ctx) \
-                and os.path.isfile(feat_file_reg_flip) \
-                and os.path.isfile(feat_file_ctx_flip)
+            if image_set == 'train2015':
+                flag_pass = flag_pass \
+                    and os.path.isfile(feat_file_reg) \
+                    and os.path.isfile(feat_file_ctx) \
+                    and os.path.isfile(feat_file_reg_flip) \
+                    and os.path.isfile(feat_file_ctx_flip)
+            else:
+                flag_pass = flag_pass \
+                    and os.path.isfile(feat_file_reg) \
+                    and os.path.isfile(feat_file_ctx)
         if flag_pass:
             print '\n',
             continue
@@ -388,8 +393,9 @@ if __name__ == '__main__':
         _t['full'].tic()
         feat_full_pre, feat_full_fto, feat_full_ftv = \
             _get_full_im_feat(im, net_pre_reg, net_fto_reg, net_ftv_reg, False)
-        feat_full_pre_flip, feat_full_fto_flip, feat_full_ftv_flip = \
-            _get_full_im_feat(im, net_pre_reg, net_fto_reg, net_ftv_reg, True)
+        if image_set == 'train2015':
+            feat_full_pre_flip, feat_full_fto_flip, feat_full_ftv_flip = \
+                _get_full_im_feat(im, net_pre_reg, net_fto_reg, net_ftv_reg, True)
         _t['full'].toc()
 
         # detection feature
@@ -401,8 +407,9 @@ if __name__ == '__main__':
                'Incorrect number of classes in {}'.format(det_file)
         feat_det_pre_reg, feat_det_pre_ctx, boxes_det = \
             _get_det_feat(im, res, top_k, net_pre_reg, net_pre_ctx, False)
-        feat_det_pre_reg_flip, feat_det_pre_ctx_flip, boxes_det_flip = \
-            _get_det_feat(im, res, top_k, net_pre_reg, net_pre_ctx, True)
+        if image_set == 'train2015':
+            feat_det_pre_reg_flip, feat_det_pre_ctx_flip, boxes_det_flip = \
+                _get_det_feat(im, res, top_k, net_pre_reg, net_pre_ctx, True)
         _t['det'].toc()
 
         # save output
@@ -414,8 +421,9 @@ if __name__ == '__main__':
             # get feat files
             feat_file_reg = os.path.join(feat_dir_reg, im_name + '.mat')
             feat_file_ctx = os.path.join(feat_dir_ctx, im_name + '.mat')
-            feat_file_reg_flip = os.path.join(feat_dir_reg, im_name + '_flip.mat')
-            feat_file_ctx_flip = os.path.join(feat_dir_ctx, im_name + '_flip.mat')
+            if image_set == 'train2015':
+                feat_file_reg_flip = os.path.join(feat_dir_reg, im_name + '_flip.mat')
+                feat_file_ctx_flip = os.path.join(feat_dir_ctx, im_name + '_flip.mat')
             # save files
             if not os.path.isfile(feat_file_reg):
                 sio.savemat(feat_file_reg, {
@@ -431,20 +439,21 @@ if __name__ == '__main__':
                     'feat_full_ftv' : feat_full_ftv,
                     'feat_det_pre_ctx' : feat_det_pre_ctx[j-1],
                     'boxes_det' : boxes_det[j-1]})
-            if not os.path.isfile(feat_file_reg_flip):
-                sio.savemat(feat_file_reg_flip, {
-                    'feat_full_pre' : feat_full_pre_flip,
-                    'feat_full_fto' : feat_full_fto_flip,
-                    'feat_full_ftv' : feat_full_ftv_flip,
-                    'feat_det_pre_reg' : feat_det_pre_reg_flip[j-1],
-                    'boxes_det' : boxes_det_flip[j-1]})
-            if not os.path.isfile(feat_file_ctx_flip):
-                sio.savemat(feat_file_ctx_flip, {
-                    'feat_full_pre' : feat_full_pre_flip,
-                    'feat_full_fto' : feat_full_fto_flip,
-                    'feat_full_ftv' : feat_full_ftv_flip,
-                    'feat_det_pre_ctx' : feat_det_pre_ctx_flip[j-1],
-                    'boxes_det' : boxes_det_flip[j-1]})
+            if image_set == 'train2015':
+                if not os.path.isfile(feat_file_reg_flip):
+                    sio.savemat(feat_file_reg_flip, {
+                        'feat_full_pre' : feat_full_pre_flip,
+                        'feat_full_fto' : feat_full_fto_flip,
+                        'feat_full_ftv' : feat_full_ftv_flip,
+                        'feat_det_pre_reg' : feat_det_pre_reg_flip[j-1],
+                        'boxes_det' : boxes_det_flip[j-1]})
+                if not os.path.isfile(feat_file_ctx_flip):
+                    sio.savemat(feat_file_ctx_flip, {
+                        'feat_full_pre' : feat_full_pre_flip,
+                        'feat_full_fto' : feat_full_fto_flip,
+                        'feat_full_ftv' : feat_full_ftv_flip,
+                        'feat_det_pre_ctx' : feat_det_pre_ctx_flip[j-1],
+                        'boxes_det' : boxes_det_flip[j-1]})
 
         _t['total'].toc()
         print 'full: {:.3f}s det: {:.3f}s total: {:.3f}s' \

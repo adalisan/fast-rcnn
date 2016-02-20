@@ -15,6 +15,7 @@ import yaml
 # from multiprocessing import Process, Queue
 
 import math
+# from utils.timer import Timer
 
 class FocusDataLayer(caffe.Layer):
     """Focus data layer."""
@@ -244,6 +245,8 @@ class FocusDataLayer(caffe.Layer):
 
     def forward(self, bottom, top):
         """Get blobs and copy them into this layer's top blob vector."""
+        # timer = Timer()
+        # timer.tic()
         blobs = self._get_next_minibatch()
 
         for blob_name, blob in blobs.iteritems():
@@ -252,6 +255,7 @@ class FocusDataLayer(caffe.Layer):
             top[top_ind].reshape(*(blob.shape))
             # Copy data into net's input blobs
             top[top_ind].data[...] = blob.astype(np.float32, copy=False)
+        # print '  forward: ' + str(timer.toc())
 
     def backward(self, top, propagate_down, bottom):
         """This layer does not propagate gradients."""

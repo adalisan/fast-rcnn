@@ -15,6 +15,8 @@ from utils.blob import prep_im_for_blob, im_list_to_blob
 # import os
 import scipy.io as sio
 
+# from utils.timer import Timer
+
 def get_minibatch(roidb, num_classes):
     """Given a roidb, construct a minibatch sampled from it."""
     num_images = len(roidb)
@@ -105,6 +107,8 @@ def get_minibatch(roidb, num_classes):
             im_blobs_s = np.zeros((num_images, 3, cfg.FOCUS_H, cfg.FOCUS_W),
                                   dtype=np.float32)
     
+    # timer = Timer()
+    # tt = 0
     for im_i in xrange(num_images):
         if cfg.USE_CACHE:
             assert(cfg.FLAG_HO)
@@ -116,19 +120,24 @@ def get_minibatch(roidb, num_classes):
                 boxes_det_o = ld_o['boxes_det']
                 boxes_det_h = ld_h['boxes_det']
             else:
+                # timer.tic()
                 ld_o = sio.loadmat(roidb[im_i]['reg_file_o'])
                 ld_h = sio.loadmat(roidb[im_i]['reg_file_h'])
+                # ld_o = sio.loadmat('/tmp/ywchao_job/' + roidb[im_i]['reg_file_o'][7:])
+                # ld_h = sio.loadmat('/tmp/ywchao_job/' + roidb[im_i]['reg_file_h'][7:])
+                # tt = tt + timer.toc()
+                # timer.tic()
                 feat_det_o  = ld_o['feat_det_pre_reg']
                 feat_det_h  = ld_h['feat_det_pre_reg']
                 boxes_det_o = ld_o['boxes_det']
                 boxes_det_h = ld_h['boxes_det']
-            if cfg.MODEL_SCENE == 0:
+            if cfg.USE_FT == 0:
                 feat_full_o = ld_o['feat_full_pre']
                 feat_full_h = ld_h['feat_full_pre']
-            if cfg.MODEL_SCENE == 1:
+            if cfg.USE_FT == 1:
                 feat_full_o = ld_o['feat_full_ftv']
                 feat_full_h = ld_h['feat_full_ftv']
-            if cfg.MODEL_SCENE == 2:
+            if cfg.USE_FT == 2:
                 feat_full_o = ld_o['feat_full_fto']
                 feat_full_h = ld_h['feat_full_fto']
             # object det feature
@@ -149,11 +158,14 @@ def get_minibatch(roidb, num_classes):
             if cfg.FLAG_FULLIM:
                 assert(np.all(feat_full_o == feat_full_h))
                 im_blobs_s[im_i,:] = feat_full_o
+            # tt = tt + timer.toc()
         else:
             # labels, overlaps, im_rois, bbox_targets, bbox_loss \
             #     = _sample_rois(roidb[im_i], fg_rois_per_image, rois_per_image,
             #                    num_classes)
+            # timer.tic()
             im = cv2.imread(roidb[im_i]['image'])
+            # tt = tt + timer.toc()
             h_org = im.shape[0]
             w_org = im.shape[1]
             # print roidb[im_i]['image']
@@ -247,6 +259,7 @@ def get_minibatch(roidb, num_classes):
         # bbox_loss_blob = np.vstack((bbox_loss_blob, bbox_loss))
         # all_overlaps = np.hstack((all_overlaps, overlaps))
 
+    # print '  minibatch: ' + str(tt)
     # For debug visualizations
     # _vis_minibatch(im_blob, rois_blob, labels_blob, all_overlaps)
 
@@ -267,7 +280,7 @@ def get_minibatch(roidb, num_classes):
             blobs[key] = im_blobs_o[ind]
         for ind in xrange(0,cfg.HMN_K):
             key = key_base + '_h%d' % (ind+1)
-            blobs[key] = im_blobs_o[ind]
+            blobs[key] = im_blobs_h[ind]
         if cfg.FLAG_FULLIM:
             blobs['fc6_s'] = im_blobs_s
     else:

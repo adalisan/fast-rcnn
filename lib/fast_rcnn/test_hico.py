@@ -287,6 +287,49 @@ def _get_blobs_focus_ho(im, rois_o, rois_h):
 
     return blobs
 
+def _get_blobs_use_cache(roidb):
+    if cfg.FLAG_CTX8:
+        ld_o = sio.loadmat(roidb['ctx_file_o'])
+        ld_h = sio.loadmat(roidb['ctx_file_h'])
+        feat_det_o  = ld_o['feat_det_pre_ctx']
+        feat_det_h  = ld_h['feat_det_pre_ctx']
+        boxes_det_o = ld_o['boxes_det']
+        boxes_det_h = ld_h['boxes_det']
+        key_base = 'pool6'
+    else:
+        ld_o = sio.loadmat(roidb['reg_file_o'])
+        ld_h = sio.loadmat(roidb['reg_file_h'])
+        feat_det_o  = ld_o['feat_det_pre_reg']
+        feat_det_h  = ld_h['feat_det_pre_reg']
+        boxes_det_o = ld_o['boxes_det']
+        boxes_det_h = ld_h['boxes_det']
+        key_base = 'fc6'
+    if cfg.USE_FT == 0:
+        feat_full_o = ld_o['feat_full_pre']
+        feat_full_h = ld_h['feat_full_pre']
+    if cfg.USE_FT == 1:
+        feat_full_o = ld_o['feat_full_ftv']
+        feat_full_h = ld_h['feat_full_ftv']
+    if cfg.USE_FT == 2:
+        feat_full_o = ld_o['feat_full_fto']
+        feat_full_h = ld_h['feat_full_fto']
+    # object det feature
+    blobs = {}
+    for ind in xrange(cfg.OBJ_K):
+        assert(np.all(roidb['boxes_o'][ind,:] == boxes_det_o[ind,:]))
+        key = key_base + '_o%d' % (ind+1)
+        blobs[key] = feat_det_o[ind,:][None, :]
+    # human det feature
+    for ind in xrange(cfg.HMN_K):
+        assert(np.all(roidb['boxes_h'][ind,:] == boxes_det_h[ind,:]))
+        key = key_base + '_h%d' % (ind+1)
+        blobs[key] = feat_det_h[ind,:][None, :]
+    # full image feature
+    if cfg.FLAG_FULLIM:
+        assert(np.all(feat_full_o == feat_full_h))
+        blobs['fc6_s'] = feat_full_o[None, :]
+    return blobs
+
 # def _bbox_pred(boxes, box_deltas):
 #     """Transform the set of class-agnostic boxes into class-specific boxes
 #     by applying the predicted offsets (box_deltas)
@@ -348,24 +391,27 @@ def im_detect(net, im, roidb):
         boxes (ndarray): R x (4*K) array of predicted bounding boxes
     """
     if cfg.FLAG_FOCUS:
-        if cfg.FLAG_HO:
-            # TODO: add FLAG_TOP_THRESH
-            # TODO: add feat4
-            boxes_o = roidb['boxes_o']
-            boxes_h = roidb['boxes_h']
-            blobs = _get_blobs_focus_ho(im, boxes_o, boxes_h)
+        if cfg.USE_CACHE:
+            assert(cfg.FLAG_HO)
+            blobs = _get_blobs_use_cache(roidb)
         else:
-            boxes = roidb['boxes']
-            blobs = _get_blobs_focus(im, roidb)
+            if cfg.FLAG_HO:
+                # TODO: add FLAG_TOP_THRESH
+                # TODO: add feat4
+                boxes_o = roidb['boxes_o']
+                boxes_h = roidb['boxes_h']
+                blobs = _get_blobs_focus_ho(im, boxes_o, boxes_h)
+            else:
+                boxes = roidb['boxes']
+                blobs = _get_blobs_focus(im, roidb)
+            if cfg.FLAG_FULLIM:
+                assert(cfg.FLAG_FOCUS == True)
+                h_org = im.shape[0]
+                w_org = im.shape[1]
+                box_f = np.array((0,0,w_org-1,h_org-1),dtype='uint16')
+                blobs['data_s'] = _get_one_blob(im, box_f)[None, :]
     else:
         blobs, unused_im_scale_factors = _get_blobs(im, roidb)
-
-    if cfg.FLAG_FULLIM:
-        assert(cfg.FLAG_FOCUS == True)
-        h_org = im.shape[0]
-        w_org = im.shape[1]
-        box_f = np.array((0,0,w_org-1,h_org-1),dtype='uint16')
-        blobs['data_s'] = _get_one_blob(im, box_f)[None, :]
 
     # Disable box dedup for HICO
     # # When mapping from image ROIs to feature map ROIs, there's some aliasing
@@ -382,22 +428,43 @@ def im_detect(net, im, roidb):
 
     # reshape network inputs and concat input blobs
     if cfg.FLAG_FOCUS:
-        if cfg.FLAG_HO:
-            for ind in xrange(cfg.OBJ_K):
-                key = 'data_o%d' % (ind+1)
-                net.blobs[key].reshape(*(blobs[key].shape))
-            for ind in xrange(cfg.HMN_K):
-                key = 'data_h%d' % (ind+1)
-                net.blobs[key].reshape(*(blobs[key].shape))
-        else:
-            for ind in xrange(cfg.TOP_K):
-                if cfg.FEAT_TYPE == 4:
-                    for s in ['l','t','r','b']:
-                        key = 'data_%d_%s' % (ind+1,s)
-                        net.blobs[key].reshape(*(blobs[key].shape))
-                else:
-                    key = 'data_%d' % (ind+1)
+        if cfg.USE_CACHE:
+            assert(cfg.FLAG_HO)
+            if cfg.FLAG_CTX8:
+                for ind in xrange(cfg.OBJ_K):
+                    key = 'pool6_o%d' % (ind+1)
                     net.blobs[key].reshape(*(blobs[key].shape))
+                for ind in xrange(cfg.HMN_K):
+                    key = 'pool6_h%d' % (ind+1)
+                    net.blobs[key].reshape(*(blobs[key].shape))
+            else:
+                for ind in xrange(cfg.OBJ_K):
+                    key = 'fc6_o%d' % (ind+1)
+                    net.blobs[key].reshape(*(blobs[key].shape))
+                for ind in xrange(cfg.HMN_K):
+                    key = 'fc6_h%d' % (ind+1)
+                    net.blobs[key].reshape(*(blobs[key].shape))
+            if cfg.FLAG_FULLIM:
+                net.blobs['fc6_s'].reshape(*(blobs['fc6_s'].shape))
+        else:
+            if cfg.FLAG_HO:
+                for ind in xrange(cfg.OBJ_K):
+                    key = 'data_o%d' % (ind+1)
+                    net.blobs[key].reshape(*(blobs[key].shape))
+                for ind in xrange(cfg.HMN_K):
+                    key = 'data_h%d' % (ind+1)
+                    net.blobs[key].reshape(*(blobs[key].shape))
+            else:
+                for ind in xrange(cfg.TOP_K):
+                    if cfg.FEAT_TYPE == 4:
+                        for s in ['l','t','r','b']:
+                            key = 'data_%d_%s' % (ind+1,s)
+                            net.blobs[key].reshape(*(blobs[key].shape))
+                    else:
+                        key = 'data_%d' % (ind+1)
+                        net.blobs[key].reshape(*(blobs[key].shape))
+            if cfg.FLAG_FULLIM:
+                net.blobs['data_s'].reshape(*(blobs['data_s'].shape))
     else:
         net.blobs['data'].reshape(*(blobs['data'].shape))
         for ind in xrange(cfg.TOP_K):
@@ -408,8 +475,6 @@ def im_detect(net, im, roidb):
             else:
                 key = 'rois_%d' % (ind+1)
                 net.blobs[key].reshape(*(blobs[key].shape))
-    if cfg.FLAG_FULLIM:
-        net.blobs['data_s'].reshape(*(blobs['data_s'].shape))
 
     # forward pass    
     blobs_out = net.forward(**(blobs))

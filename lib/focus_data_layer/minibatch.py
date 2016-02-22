@@ -12,10 +12,10 @@ import numpy as np
 import cv2
 from fast_rcnn.config import cfg
 from utils.blob import prep_im_for_blob, im_list_to_blob
-# import os
+import os
 import scipy.io as sio
-
 # from utils.timer import Timer
+import h5py
 
 def get_minibatch(roidb, num_classes):
     """Given a roidb, construct a minibatch sampled from it."""
@@ -84,19 +84,41 @@ def get_minibatch(roidb, num_classes):
             im_blobs_s = np.zeros((num_images, 4096), dtype=np.float32)
     else:
         if cfg.FLAG_HO:
-            # TODO: add feat4
-            # im_blobs_o = [im_blob.copy()] * cfg.OBJ_K
-            # im_blobs_h = [im_blob.copy()] * cfg.HMN_K
-            if cfg.FLAG_CTX8:
-                LEN_H = cfg.FOCUS_LEN_HO
-                LEN_W = cfg.FOCUS_LEN_HO
+            if cfg.MODE_OBJ == -1 and cfg.MODE_HMN == -1:
+                # TODO: add feat4
+                # im_blobs_o = [im_blob.copy()] * cfg.OBJ_K
+                # im_blobs_h = [im_blob.copy()] * cfg.HMN_K
+                if cfg.FLAG_CTX8:
+                    LEN_H = cfg.FOCUS_LEN_HO
+                    LEN_W = cfg.FOCUS_LEN_HO
+                else:
+                    LEN_H = cfg.FOCUS_H
+                    LEN_W = cfg.FOCUS_W
+                im_blobs_o = [np.zeros((num_images, 3, LEN_H, LEN_W), dtype=np.float32)
+                              for _ in xrange(cfg.OBJ_K)]
+                im_blobs_h = [np.zeros((num_images, 3, LEN_H, LEN_W), dtype=np.float32)
+                              for _ in xrange(cfg.HMN_K)]
             else:
-                LEN_H = cfg.FOCUS_H
-                LEN_W = cfg.FOCUS_W
-            im_blobs_o = [np.zeros((num_images, 3, LEN_H, LEN_W), dtype=np.float32)
-                          for _ in xrange(cfg.OBJ_K)]
-            im_blobs_h = [np.zeros((num_images, 3, LEN_H, LEN_W), dtype=np.float32)
-                          for _ in xrange(cfg.HMN_K)]
+                # object stream
+                if cfg.MODE_OBJ == 0:
+                    im_blobs_o = [np.zeros((num_images, 3, 227, 227), dtype=np.float32)
+                              for _ in xrange(cfg.OBJ_K)]
+                if cfg.MODE_OBJ == 1 or cfg.MODE_OBJ == 2:
+                    im_blobs_o = [np.zeros((num_images, 3, 419, 419), dtype=np.float32)
+                              for _ in xrange(cfg.OBJ_K)]
+                # human stream
+                if cfg.MODE_HMN == 0:
+                    im_blobs_h = [np.zeros((num_images, 3, 227, 227), dtype=np.float32)
+                              for _ in xrange(cfg.HMN_K)]
+                if cfg.MODE_HMN == 1 or cfg.MODE_HMN == 2:
+                    im_blobs_h = [np.zeros((num_images, 3, 419, 419), dtype=np.float32)
+                              for _ in xrange(cfg.HMN_K)]
+                if cfg.MODE_HMN == 3:
+                    im_blobs_h = [np.zeros((num_images, 16, 64, 64), dtype=np.float32)
+                              for _ in xrange(cfg.HMN_K)]
+                if cfg.MODE_HMN == 4:
+                    im_blobs_h = [np.zeros((num_images, 512, 64, 64), dtype=np.float32)
+                              for _ in xrange(cfg.HMN_K)]
         else:
             # TODO: add ctx8
             # im_blobs = [im_blob.copy()] * cfg.TOP_K
@@ -111,6 +133,7 @@ def get_minibatch(roidb, num_classes):
     # tt = 0
     for im_i in xrange(num_images):
         if cfg.USE_CACHE:
+            # TODO: add MODE_OBJ & MODE_HMN
             assert(cfg.FLAG_HO)
             if cfg.FLAG_CTX8:
                 ld_o = sio.loadmat(roidb[im_i]['ctx_file_o'])
@@ -164,6 +187,9 @@ def get_minibatch(roidb, num_classes):
             #     = _sample_rois(roidb[im_i], fg_rois_per_image, rois_per_image,
             #                    num_classes)
             # timer.tic()
+            # im_file = '/tmp/ywchao_job/' + \
+            #           '/'.join(roidb[im_i]['image'].split('/')[2:])
+            # im = cv2.imread(im_file)
             im = cv2.imread(roidb[im_i]['image'])
             # tt = tt + timer.toc()
             h_org = im.shape[0]
@@ -172,36 +198,69 @@ def get_minibatch(roidb, num_classes):
             if roidb[im_i]['flipped']:
                 im = im[:, ::-1, :]
             if cfg.FLAG_HO:
-                # TODO: add FLAG_TOP_THRESH
-                # TODO: add feat4
-                for ind in xrange(cfg.OBJ_K):
-                    if cfg.FLAG_CTX8:
-                        boxes_o  = roidb[im_i]['boxes_o'][ind,:]
-                        bbox_en  = _enlarge_bbox_ctx8(boxes_o, w_org, h_org)
-                        bbox_en  = np.around(bbox_en[0,:]).astype(np.uint16)
-                        im_focus = _get_one_blob(im, bbox_en,
-                                                 cfg.FOCUS_LEN_HO, cfg.FOCUS_LEN_HO)
-                    else:
-                        im_focus = _get_one_blob(im, roidb[im_i]['boxes_o'][ind,:])
-                        # im_focus, save_focus = _get_one_blob(im, roidb[im_i]['boxes_o'][ind,:])
-                    im_blobs_o[ind][im_i, :, :, :] = im_focus
-                    # savefile = 'test_i%d_o%d.jpg' % (im_i, ind)
-                    # if not os.path.isfile(savefile):
-                    #     cv2.imwrite(savefile,save_focus)
-                for ind in xrange(cfg.HMN_K):
-                    if cfg.FLAG_CTX8:
-                        boxes_h  = roidb[im_i]['boxes_h'][ind,:]
-                        bbox_en  = _enlarge_bbox_ctx8(boxes_h, w_org, h_org)
-                        bbox_en  = np.around(bbox_en[0,:]).astype(np.uint16)
-                        im_focus = _get_one_blob(im, bbox_en,
-                                                 cfg.FOCUS_LEN_HO, cfg.FOCUS_LEN_HO)
-                    else:
-                        im_focus = _get_one_blob(im, roidb[im_i]['boxes_h'][ind,:])
-                        # im_focus, save_focus = _get_one_blob(im, roidb[im_i]['boxes_h'][ind,:])
-                    im_blobs_h[ind][im_i, :, :, :] = im_focus
-                    # savefile = 'test_i%d_h%d.jpg' % (im_i, ind)
-                    # if not os.path.isfile(savefile):
-                    #     cv2.imwrite(savefile,save_focus)
+                if cfg.MODE_OBJ == -1 and cfg.MODE_HMN == -1:
+                    # TODO: add FLAG_TOP_THRESH
+                    # TODO: add feat4
+                    for ind in xrange(cfg.OBJ_K):
+                        if cfg.FLAG_CTX8:
+                            boxes_o  = roidb[im_i]['boxes_o'][ind,:]
+                            bbox_en  = _enlarge_bbox_ctx8(boxes_o, w_org, h_org)
+                            bbox_en  = np.around(bbox_en[0,:]).astype(np.uint16)
+                            im_focus = _get_one_blob(im, bbox_en,
+                                                     cfg.FOCUS_LEN_HO, cfg.FOCUS_LEN_HO)
+                        else:
+                            im_focus = _get_one_blob(im, roidb[im_i]['boxes_o'][ind,:])
+                            # im_focus, save_focus = _get_one_blob(im, roidb[im_i]['boxes_o'][ind,:])
+                        im_blobs_o[ind][im_i, :, :, :] = im_focus
+                        # savefile = 'test_i%d_o%d.jpg' % (im_i, ind)
+                        # if not os.path.isfile(savefile):
+                        #     cv2.imwrite(savefile,save_focus)
+                    for ind in xrange(cfg.HMN_K):
+                        if cfg.FLAG_CTX8:
+                            boxes_h  = roidb[im_i]['boxes_h'][ind,:]
+                            bbox_en  = _enlarge_bbox_ctx8(boxes_h, w_org, h_org)
+                            bbox_en  = np.around(bbox_en[0,:]).astype(np.uint16)
+                            im_focus = _get_one_blob(im, bbox_en,
+                                                     cfg.FOCUS_LEN_HO, cfg.FOCUS_LEN_HO)
+                        else:
+                            im_focus = _get_one_blob(im, roidb[im_i]['boxes_h'][ind,:])
+                            # im_focus, save_focus = _get_one_blob(im, roidb[im_i]['boxes_h'][ind,:])
+                        im_blobs_h[ind][im_i, :, :, :] = im_focus
+                        # savefile = 'test_i%d_h%d.jpg' % (im_i, ind)
+                        # if not os.path.isfile(savefile):
+                        #     cv2.imwrite(savefile,save_focus)
+                else:
+                    # assert(cfg.MODE_OBJ != -1 and cfg.MODE_HMN != -1)
+                    for ind in xrange(cfg.OBJ_K):
+                        if cfg.MODE_OBJ == 0:
+                            im_focus = _get_one_blob(im, roidb[im_i]['boxes_o'][ind,:])
+                        if cfg.MODE_OBJ == 1 or cfg.MODE_OBJ == 2:
+                            boxes_o  = roidb[im_i]['boxes_o'][ind,:]
+                            bbox_en  = _enlarge_bbox_ctx8(boxes_o, w_org, h_org)
+                            bbox_en  = np.around(bbox_en[0,:]).astype(np.uint16)
+                            im_focus = _get_one_blob(im, bbox_en, 419, 419)
+                        im_blobs_o[ind][im_i, :, :, :] = im_focus
+                    for ind in xrange(cfg.HMN_K):
+                        if cfg.MODE_HMN == 0:
+                            im_focus = _get_one_blob(im, roidb[im_i]['boxes_h'][ind,:])
+                        if cfg.MODE_HMN == 1 or cfg.MODE_HMN == 2:
+                            boxes_h  = roidb[im_i]['boxes_h'][ind,:]
+                            bbox_en  = _enlarge_bbox_ctx8(boxes_h, w_org, h_org)
+                            bbox_en  = np.around(bbox_en[0,:]).astype(np.uint16)
+                            im_focus = _get_one_blob(im, bbox_en, 419, 419)
+                        if cfg.MODE_HMN == 3:
+                            hmap_file = os.path.basename(roidb[im_i]['reg_file_h'])
+                            hmap_file = 'hmap_' + hmap_file.replace('.mat','.hdf5')
+                            hmap_file = 'caches/cache_pose_hmap/train2015/' + hmap_file
+                            f = h5py.File(hmap_file, 'r')
+                            im_focus = f['hmap'][:][ind,:]
+                            # yunfan added 1 pixel to all the coordinates
+                            boxes_h = f['det_keep'][:][ind,0:4]
+                            boxes_h = np.around(boxes_h).astype('uint16')-1
+                            assert(np.all(boxes_h == roidb[im_i]['boxes_h'][ind,:]))
+                        # TODO:
+                        # if cfg.MODE_HMN == 4:
+                        im_blobs_h[ind][im_i, :, :, :] = im_focus
             else:
                 # TODO: add ctx8
                 for ind in xrange(cfg.TOP_K):

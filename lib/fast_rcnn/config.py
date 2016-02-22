@@ -73,6 +73,15 @@ __C.USE_CACHE = False
 # 0: pre-trained, 1: fine-tuned V, 2: fine-tuned O.
 __C.USE_FT = 0
 
+# Separate contorl for object and human stream mode
+#   -1: no effect; controlled by USE_CTX8
+#    0: tight detection box
+#    1: ccl
+#    2: pose heat map (human stream only)
+#    3: pose feature (human stream only)
+__C.MODE_OBJ = -1
+__C.MODE_HMN = -1
+
 #
 # Training options
 #

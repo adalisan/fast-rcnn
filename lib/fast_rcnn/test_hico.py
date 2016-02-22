@@ -20,6 +20,7 @@ from utils.blob import im_list_to_blob
 import os
 
 import scipy.io as sio
+import h5py
 
 def _get_4_side_bbox(bbox, im_width, im_height):
     assert(bbox.ndim == 1 and bbox.shape[0] == 4)
@@ -246,44 +247,82 @@ def _get_blobs_focus(im, roidb):
 
     return blobs
 
-def _get_blobs_focus_ho(im, rois_o, rois_h):
+def _get_blobs_focus_ho(im, rois_o, rois_h, im_base):
     """Convert an image into network inputs for focus data layer."""
     blobs = {}
 
     h_org = im.shape[0]
     w_org = im.shape[1]
-    for ind in xrange(cfg.OBJ_K):
-        if cfg.FLAG_CTX8:
-            boxes_o = rois_o[ind,:]
-            bbox_en = _enlarge_bbox_ctx8(boxes_o, w_org, h_org)
-            bbox_en = np.around(bbox_en[0,:]).astype(np.uint16)
-            im_blob = np.zeros((1, 3, cfg.FOCUS_LEN_HO, cfg.FOCUS_LEN_HO),
-                               dtype=np.float32)
-            im_blob[0, :, :, :] = _get_one_blob(im, bbox_en,
-                                                cfg.FOCUS_LEN_HO,
-                                                cfg.FOCUS_LEN_HO)
-        else:
-            im_blob = np.zeros((1, 3, cfg.FOCUS_H, cfg.FOCUS_W),
-                               dtype=np.float32)
-            im_blob[0, :, :, :] = _get_one_blob(im, rois_o[ind,:])
-        key = 'data_o%d' % (ind+1)
-        blobs[key] = im_blob
-    for ind in xrange(cfg.HMN_K):
-        if cfg.FLAG_CTX8:
-            boxes_h = rois_h[ind,:]
-            bbox_en = _enlarge_bbox_ctx8(boxes_h, w_org, h_org)
-            bbox_en = np.around(bbox_en[0,:]).astype(np.uint16)
-            im_blob = np.zeros((1, 3, cfg.FOCUS_LEN_HO, cfg.FOCUS_LEN_HO),
-                               dtype=np.float32)
-            im_blob[0, :, :, :] = _get_one_blob(im, bbox_en,
-                                                cfg.FOCUS_LEN_HO,
-                                                cfg.FOCUS_LEN_HO)
-        else:
-            im_blob = np.zeros((1, 3, cfg.FOCUS_H, cfg.FOCUS_W),
-                               dtype=np.float32)
-            im_blob[0, :, :, :] = _get_one_blob(im, rois_h[ind,:])
-        key = 'data_h%d' % (ind+1)
-        blobs[key] = im_blob
+    if cfg.MODE_OBJ == -1 and cfg.MODE_HMN == -1:
+        for ind in xrange(cfg.OBJ_K):
+            if cfg.FLAG_CTX8:
+                boxes_o = rois_o[ind,:]
+                bbox_en = _enlarge_bbox_ctx8(boxes_o, w_org, h_org)
+                bbox_en = np.around(bbox_en[0,:]).astype(np.uint16)
+                im_blob = np.zeros((1, 3, cfg.FOCUS_LEN_HO, cfg.FOCUS_LEN_HO),
+                                   dtype=np.float32)
+                im_blob[0, :, :, :] = _get_one_blob(im, bbox_en,
+                                                    cfg.FOCUS_LEN_HO,
+                                                    cfg.FOCUS_LEN_HO)
+            else:
+                im_blob = np.zeros((1, 3, cfg.FOCUS_H, cfg.FOCUS_W),
+                                   dtype=np.float32)
+                im_blob[0, :, :, :] = _get_one_blob(im, rois_o[ind,:])
+            key = 'data_o%d' % (ind+1)
+            blobs[key] = im_blob
+        for ind in xrange(cfg.HMN_K):
+            if cfg.FLAG_CTX8:
+                boxes_h = rois_h[ind,:]
+                bbox_en = _enlarge_bbox_ctx8(boxes_h, w_org, h_org)
+                bbox_en = np.around(bbox_en[0,:]).astype(np.uint16)
+                im_blob = np.zeros((1, 3, cfg.FOCUS_LEN_HO, cfg.FOCUS_LEN_HO),
+                                   dtype=np.float32)
+                im_blob[0, :, :, :] = _get_one_blob(im, bbox_en,
+                                                    cfg.FOCUS_LEN_HO,
+                                                    cfg.FOCUS_LEN_HO)
+            else:
+                im_blob = np.zeros((1, 3, cfg.FOCUS_H, cfg.FOCUS_W),
+                                   dtype=np.float32)
+                im_blob[0, :, :, :] = _get_one_blob(im, rois_h[ind,:])
+            key = 'data_h%d' % (ind+1)
+            blobs[key] = im_blob
+    else:
+        for ind in xrange(cfg.OBJ_K):
+            if cfg.MODE_OBJ == 0:
+                im_blob = np.zeros((1, 3, 227, 227), dtype=np.float32)
+                im_blob[0, :, :, :] = _get_one_blob(im, rois_o[ind,:])
+            if cfg.MODE_OBJ == 1 or cfg.MODE_OBJ == 2:
+                boxes_o = rois_o[ind,:]
+                bbox_en = _enlarge_bbox_ctx8(boxes_o, w_org, h_org)
+                bbox_en = np.around(bbox_en[0,:]).astype(np.uint16)
+                im_blob = np.zeros((1, 3, 419, 419), dtype=np.float32)
+                im_blob[0, :, :, :] = _get_one_blob(im, bbox_en, 419, 419)
+            key = 'data_o%d' % (ind+1)
+            blobs[key] = im_blob
+        for ind in xrange(cfg.HMN_K):
+            if cfg.MODE_HMN == 0:
+                im_blob = np.zeros((1, 3, 227, 227), dtype=np.float32)
+                im_blob[0, :, :, :] = _get_one_blob(im, rois_h[ind,:])
+            if cfg.MODE_HMN == 1 or cfg.MODE_HMN == 2:
+                boxes_h = rois_h[ind,:]
+                bbox_en = _enlarge_bbox_ctx8(boxes_h, w_org, h_org)
+                bbox_en = np.around(bbox_en[0,:]).astype(np.uint16)
+                im_blob = np.zeros((1, 3, 419, 419), dtype=np.float32)
+                im_blob[0, :, :, :] = _get_one_blob(im, bbox_en, 419, 419)
+            if cfg.MODE_HMN == 3:
+                hmap_file = 'hmap_' + im_base.replace('.mat','.hdf5')
+                hmap_file = 'caches/cache_pose_hmap/test2015/' + hmap_file
+                f = h5py.File(hmap_file, 'r')
+                im_blob = np.zeros((1, 16, 64, 64), dtype=np.float32)
+                im_blob[0, :, :, :] = f['hmap'][:][ind,:]
+                # yunfan added 1 pixel to all the coordinates
+                boxes_h = f['det_keep'][:][ind,0:4]
+                boxes_h = np.around(boxes_h).astype('uint16')-1
+                assert(np.all(boxes_h == rois_h[ind,:]))
+            # TODO:
+            # if cfg.MODE_HMN == 4:
+            key = 'data_h%d' % (ind+1)
+            blobs[key] = im_blob
 
     return blobs
 
@@ -400,7 +439,8 @@ def im_detect(net, im, roidb):
                 # TODO: add feat4
                 boxes_o = roidb['boxes_o']
                 boxes_h = roidb['boxes_h']
-                blobs = _get_blobs_focus_ho(im, boxes_o, boxes_h)
+                im_base = os.path.basename(roidb['reg_file_h'])
+                blobs = _get_blobs_focus_ho(im, boxes_o, boxes_h, im_base)
             else:
                 boxes = roidb['boxes']
                 blobs = _get_blobs_focus(im, roidb)

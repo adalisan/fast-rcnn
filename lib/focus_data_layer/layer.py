@@ -69,10 +69,12 @@ class FocusDataLayer(caffe.Layer):
                 self._shuffle_roidb_inds_obj()
         else:
             if self._cur + cfg.TRAIN.IMS_PER_BATCH >= len(self._roidb):
+                # print 'shuffled.'
                 self._shuffle_roidb_inds()
 
         db_inds = self._perm[self._cur:self._cur + cfg.TRAIN.IMS_PER_BATCH]
         self._cur += cfg.TRAIN.IMS_PER_BATCH
+        # print(db_inds)
         return db_inds
 
     def _get_next_minibatch(self):
@@ -150,6 +152,7 @@ class FocusDataLayer(caffe.Layer):
         self._name_to_top_map = {}
     
         if cfg.USE_CACHE:
+            # TODO: add MODE_OBJ & MODE_HMN
             assert(cfg.FLAG_HO)
             for ind in xrange(0,cfg.OBJ_K):
                 tind = ind
@@ -179,23 +182,45 @@ class FocusDataLayer(caffe.Layer):
             # data blob: holds a batch of N image tuples, each tuple contains
             # K cropped windows with 3 channels.
             if cfg.FLAG_HO:
-                # TODO: add feat4
-                if cfg.FLAG_CTX8:
-                    LEN_H = cfg.FOCUS_LEN_HO
-                    LEN_W = cfg.FOCUS_LEN_HO
+                if cfg.MODE_OBJ == -1 and cfg.MODE_HMN == -1:
+                    # TODO: add feat4
+                    if cfg.FLAG_CTX8:
+                        LEN_H = cfg.FOCUS_LEN_HO
+                        LEN_W = cfg.FOCUS_LEN_HO
+                    else:
+                        LEN_H = cfg.FOCUS_H
+                        LEN_W = cfg.FOCUS_W
+                    for ind in xrange(0,cfg.OBJ_K):
+                        key = 'data_o%d' % (ind+1)
+                        tind = ind
+                        self._name_to_top_map[key] = tind
+                        top[tind].reshape(1, 3, LEN_H, LEN_W)
+                    for ind in xrange(0,cfg.HMN_K):
+                        key = 'data_h%d' % (ind+1)
+                        tind = ind + cfg.OBJ_K
+                        self._name_to_top_map[key] = tind
+                        top[tind].reshape(1, 3, LEN_H, LEN_W)
                 else:
-                    LEN_H = cfg.FOCUS_H
-                    LEN_W = cfg.FOCUS_W
-                for ind in xrange(0,cfg.OBJ_K):
-                    key = 'data_o%d' % (ind+1)
-                    tind = ind
-                    self._name_to_top_map[key] = tind
-                    top[tind].reshape(1, 3, LEN_H, LEN_W)
-                for ind in xrange(0,cfg.HMN_K):
-                    key = 'data_h%d' % (ind+1)
-                    tind = ind + cfg.OBJ_K
-                    self._name_to_top_map[key] = tind
-                    top[tind].reshape(1, 3, LEN_H, LEN_W)
+                    for ind in xrange(0,cfg.OBJ_K):
+                        key = 'data_o%d' % (ind+1)
+                        tind = ind
+                        self._name_to_top_map[key] = tind
+                        if cfg.MODE_OBJ == 0:
+                            top[tind].reshape(1, 3, 227, 227)
+                        if cfg.MODE_OBJ == 1 or cfg.MODE_OBJ == 2:
+                            top[tind].reshape(1, 3, 419, 419)
+                    for ind in xrange(0,cfg.HMN_K):
+                        key = 'data_h%d' % (ind+1)
+                        tind = ind + cfg.OBJ_K
+                        self._name_to_top_map[key] = tind
+                        if cfg.MODE_HMN == 0:
+                            top[tind].reshape(1, 3, 227, 227)
+                        if cfg.MODE_HMN == 1 or cfg.MODE_HMN == 2:
+                            top[tind].reshape(1, 3, 419, 419)
+                        if cfg.MODE_HMN == 3:
+                            top[tind].reshape(1, 16, 64, 64)
+                        if cfg.MODE_HMN == 4:
+                            top[tind].reshape(1, 512, 64, 64)
             else:
                 # TODO: add ctx8
                 for ind in xrange(0,cfg.TOP_K):

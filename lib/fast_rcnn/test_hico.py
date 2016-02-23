@@ -315,10 +315,20 @@ def _get_blobs_focus_ho(im, rois_o, rois_h, im_base):
                 f = h5py.File(hmap_file, 'r')
                 im_blob = np.zeros((1, 16, 64, 64), dtype=np.float32)
                 im_blob[0, :, :, :] = f['hmap'][:][ind,:]
-                # yunfan added 1 pixel to all the coordinates
+            if cfg.MODE_HMN == 4:
+                feat_file = 'hmap_' + im_base.replace('.mat','.hdf5')
+                feat_file = 'caches/cache_pose_feat/test2015/' + feat_file
+                f = h5py.File(feat_file, 'r')
+                im_blob = np.zeros((1, 512, 64, 64), dtype=np.float32)
+                im_blob[0, :, :, :] = f['feat'][:][ind,:]
+            # assertion: yunfan added 1 pixel to all the coordinates ?
+            if cfg.MODE_HMN == 3 or cfg.MODE_HMN == 4:
                 boxes_h = f['det_keep'][:][ind,0:4]
-                boxes_h = np.around(boxes_h).astype('uint16')-1
-                assert(np.all(boxes_h == rois_h[ind,:]))
+                boxes_h = np.around(boxes_h)-1  # type float32
+                boxes_cmp = roidb[im_i]['boxes_h'][ind,:].astype('float32')
+                diff = np.abs(boxes_h - boxes_cmp)
+                assert(np.all(diff <= 1))
+                f.close()
             # TODO:
             # if cfg.MODE_HMN == 4:
             key = 'data_h%d' % (ind+1)

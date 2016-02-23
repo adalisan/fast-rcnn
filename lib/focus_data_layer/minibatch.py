@@ -249,17 +249,25 @@ def get_minibatch(roidb, num_classes):
                             bbox_en  = np.around(bbox_en[0,:]).astype(np.uint16)
                             im_focus = _get_one_blob(im, bbox_en, 419, 419)
                         if cfg.MODE_HMN == 3:
-                            hmap_file = os.path.basename(roidb[im_i]['reg_file_h'])
-                            hmap_file = 'hmap_' + hmap_file.replace('.mat','.hdf5')
+                            im_base = os.path.basename(roidb[im_i]['reg_file_h'])
+                            hmap_file = 'hmap_' + im_base.replace('.mat','.hdf5')
                             hmap_file = 'caches/cache_pose_hmap/train2015/' + hmap_file
                             f = h5py.File(hmap_file, 'r')
                             im_focus = f['hmap'][:][ind,:]
-                            # yunfan added 1 pixel to all the coordinates
+                        if cfg.MODE_HMN == 4:
+                            im_base = os.path.basename(roidb[im_i]['reg_file_h'])
+                            feat_file = 'feat_' + im_base.replace('.mat','.hdf5')
+                            feat_file = 'caches/cache_pose_feat/train2015/' + feat_file
+                            f = h5py.File(feat_file, 'r')
+                            im_focus = f['feat'][:][ind,:]
+                        # assertion: yunfan added 1 pixel to all the coordinates ?
+                        if cfg.MODE_HMN == 3 or cfg.MODE_HMN == 4:
                             boxes_h = f['det_keep'][:][ind,0:4]
-                            boxes_h = np.around(boxes_h).astype('uint16')-1
-                            assert(np.all(boxes_h == roidb[im_i]['boxes_h'][ind,:]))
-                        # TODO:
-                        # if cfg.MODE_HMN == 4:
+                            boxes_h = np.around(boxes_h)-1  # type float32
+                            boxes_cmp = roidb[im_i]['boxes_h'][ind,:].astype('float32')
+                            diff = np.abs(boxes_h - boxes_cmp)
+                            assert(np.all(diff <= 1))
+                            f.close()
                         im_blobs_h[ind][im_i, :, :, :] = im_focus
             else:
                 # TODO: add ctx8

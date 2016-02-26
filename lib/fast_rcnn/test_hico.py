@@ -247,7 +247,7 @@ def _get_blobs_focus(im, roidb):
 
     return blobs
 
-def _get_blobs_focus_ho(im, rois_o, rois_h, im_base):
+def _get_blobs_focus_ho(im, rois_o, rois_h, im_name):
     """Convert an image into network inputs for focus data layer."""
     blobs = {}
 
@@ -310,23 +310,21 @@ def _get_blobs_focus_ho(im, rois_o, rois_h, im_base):
                 im_blob = np.zeros((1, 3, 419, 419), dtype=np.float32)
                 im_blob[0, :, :, :] = _get_one_blob(im, bbox_en, 419, 419)
             if cfg.MODE_HMN == 3:
-                hmap_file = 'hmap_' + im_base.replace('.mat','.hdf5')
-                hmap_file = 'caches/cache_pose_hmap/test2015/' + hmap_file
-                f = h5py.File(hmap_file, 'r')
                 im_blob = np.zeros((1, 16, 64, 64), dtype=np.float32)
-                im_blob[0, :, :, :] = f['hmap'][:][ind,:]
+                feat_dir = 'caches/cache_pose_hmap/test2015/'
             if cfg.MODE_HMN == 4:
-                feat_file = 'hmap_' + im_base.replace('.mat','.hdf5')
-                feat_file = 'caches/cache_pose_feat/test2015/' + feat_file
-                f = h5py.File(feat_file, 'r')
-                im_blob = np.zeros((1, 512, 64, 64), dtype=np.float32)
-                im_blob[0, :, :, :] = f['feat'][:][ind,:]
-            # assertion: yunfan added 1 pixel to all the coordinates ?
+                im_blob = np.zeros((1, 256, 16, 16), dtype=np.float32)
+                feat_dir = 'caches/cache_pose_mid/test2015/'
             if cfg.MODE_HMN == 3 or cfg.MODE_HMN == 4:
-                boxes_h = f['det_keep'][:][ind,0:4]
-                boxes_h = np.around(boxes_h)-1  # type float32
-                boxes_cmp = roidb[im_i]['boxes_h'][ind,:].astype('float32')
-                diff = np.abs(boxes_h - boxes_cmp)
+                # load feature file
+                feat_name = im_name.replace('.mat','.hdf5')
+                feat_file = feat_dir + feat_name
+                f = h5py.File(feat_file, 'r')
+                im_blob[0, :, :, :] = f['feat'][:][ind,:]
+                # assertion
+                boxes_h_1 = f['boxes'][:][ind,:]  # type float32
+                boxes_h_2 = rois_h[ind,:].astype('float32')
+                diff = np.abs(boxes_h_1 - boxes_h_2)
                 assert(np.all(diff <= 1))
                 f.close()
             # TODO:
@@ -449,8 +447,8 @@ def im_detect(net, im, roidb):
                 # TODO: add feat4
                 boxes_o = roidb['boxes_o']
                 boxes_h = roidb['boxes_h']
-                im_base = os.path.basename(roidb['reg_file_h'])
-                blobs = _get_blobs_focus_ho(im, boxes_o, boxes_h, im_base)
+                im_name = os.path.basename(roidb['reg_file_h'])
+                blobs = _get_blobs_focus_ho(im, boxes_o, boxes_h, im_name)
             else:
                 boxes = roidb['boxes']
                 blobs = _get_blobs_focus(im, roidb)

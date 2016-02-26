@@ -220,7 +220,7 @@ class FocusDataLayer(caffe.Layer):
                         if cfg.MODE_HMN == 3:
                             top[tind].reshape(1, 16, 64, 64)
                         if cfg.MODE_HMN == 4:
-                            top[tind].reshape(1, 512, 64, 64)
+                            top[tind].reshape(1, 256, 16, 16)
             else:
                 # TODO: add ctx8
                 for ind in xrange(0,cfg.TOP_K):

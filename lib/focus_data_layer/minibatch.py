@@ -117,7 +117,7 @@ def get_minibatch(roidb, num_classes):
                     im_blobs_h = [np.zeros((num_images, 16, 64, 64), dtype=np.float32)
                               for _ in xrange(cfg.HMN_K)]
                 if cfg.MODE_HMN == 4:
-                    im_blobs_h = [np.zeros((num_images, 512, 64, 64), dtype=np.float32)
+                    im_blobs_h = [np.zeros((num_images, 256, 16, 16), dtype=np.float32)
                               for _ in xrange(cfg.HMN_K)]
         else:
             # TODO: add ctx8
@@ -249,23 +249,20 @@ def get_minibatch(roidb, num_classes):
                             bbox_en  = np.around(bbox_en[0,:]).astype(np.uint16)
                             im_focus = _get_one_blob(im, bbox_en, 419, 419)
                         if cfg.MODE_HMN == 3:
-                            im_base = os.path.basename(roidb[im_i]['reg_file_h'])
-                            hmap_file = 'hmap_' + im_base.replace('.mat','.hdf5')
-                            hmap_file = 'caches/cache_pose_hmap/train2015/' + hmap_file
-                            f = h5py.File(hmap_file, 'r')
-                            im_focus = f['hmap'][:][ind,:]
+                            feat_dir = 'caches/cache_pose_hmap/train2015/'
                         if cfg.MODE_HMN == 4:
-                            im_base = os.path.basename(roidb[im_i]['reg_file_h'])
-                            feat_file = 'feat_' + im_base.replace('.mat','.hdf5')
-                            feat_file = 'caches/cache_pose_feat/train2015/' + feat_file
+                            feat_dir = 'caches/cache_pose_mid/train2015/'
+                        if cfg.MODE_HMN == 3 or cfg.MODE_HMN == 4:
+                            # load feature file
+                            im_name = os.path.basename(roidb[im_i]['reg_file_h'])
+                            feat_name = im_name.replace('.mat','.hdf5')
+                            feat_file = feat_dir + feat_name
                             f = h5py.File(feat_file, 'r')
                             im_focus = f['feat'][:][ind,:]
-                        # assertion: yunfan added 1 pixel to all the coordinates ?
-                        if cfg.MODE_HMN == 3 or cfg.MODE_HMN == 4:
-                            boxes_h = f['det_keep'][:][ind,0:4]
-                            boxes_h = np.around(boxes_h)-1  # type float32
-                            boxes_cmp = roidb[im_i]['boxes_h'][ind,:].astype('float32')
-                            diff = np.abs(boxes_h - boxes_cmp)
+                            # assertion
+                            boxes_h_1 = f['boxes'][:][ind,:]  # type float32
+                            boxes_h_2 = roidb[im_i]['boxes_h'][ind,:].astype('float32')
+                            diff = np.abs(boxes_h_1 - boxes_h_2)
                             assert(np.all(diff <= 1))
                             f.close()
                         im_blobs_h[ind][im_i, :, :, :] = im_focus

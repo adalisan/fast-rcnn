@@ -119,6 +119,9 @@ def get_minibatch(roidb, num_classes):
                 if cfg.MODE_HMN == 4:
                     im_blobs_h = [np.zeros((num_images, 256, 16, 16), dtype=np.float32)
                               for _ in xrange(cfg.HMN_K)]
+                if cfg.MODE_HMN == 5:
+                    im_blobs_h = [np.zeros((num_images, 512, 8, 8), dtype=np.float32)
+                              for _ in xrange(cfg.HMN_K)]
         else:
             # TODO: add ctx8
             # im_blobs = [im_blob.copy()] * cfg.TOP_K
@@ -252,7 +255,9 @@ def get_minibatch(roidb, num_classes):
                             feat_dir = 'caches/cache_pose_hmap/train2015/'
                         if cfg.MODE_HMN == 4:
                             feat_dir = 'caches/cache_pose_mid/train2015/'
-                        if cfg.MODE_HMN == 3 or cfg.MODE_HMN == 4:
+                        if cfg.MODE_HMN == 5:
+                            feat_dir = 'caches/cache_pose_feat_pool_1_8/train2015/'
+                        if cfg.MODE_HMN == 3 or cfg.MODE_HMN == 4 or cfg.MODE_HMN == 5:
                             # load feature file
                             im_name = os.path.basename(roidb[im_i]['reg_file_h'])
                             feat_name = im_name.replace('.mat','.hdf5')

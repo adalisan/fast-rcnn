@@ -315,7 +315,10 @@ def _get_blobs_focus_ho(im, rois_o, rois_h, im_name):
             if cfg.MODE_HMN == 4:
                 im_blob = np.zeros((1, 256, 16, 16), dtype=np.float32)
                 feat_dir = 'caches/cache_pose_mid/test2015/'
-            if cfg.MODE_HMN == 3 or cfg.MODE_HMN == 4:
+            if cfg.MODE_HMN == 5:
+                im_blob = np.zeros((1, 512, 8, 8), dtype=np.float32)
+                feat_dir = 'caches/cache_pose_feat_pool_1_8/test2015/'
+            if cfg.MODE_HMN == 3 or cfg.MODE_HMN == 4 or cfg.MODE_HMN == 5:
                 # load feature file
                 feat_name = im_name.replace('.mat','.hdf5')
                 feat_file = feat_dir + feat_name

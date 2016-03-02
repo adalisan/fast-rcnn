@@ -215,13 +215,18 @@ class FocusDataLayer(caffe.Layer):
                         self._name_to_top_map[key] = tind
                         if cfg.MODE_HMN == 0:
                             top[tind].reshape(1, 3, 227, 227)
-                        if cfg.MODE_HMN == 1 or cfg.MODE_HMN == 2:
+                        if cfg.MODE_HMN == 1 or cfg.MODE_HMN == 2 or cfg.MODE_HMN == 6:
                             top[tind].reshape(1, 3, 419, 419)
                         if cfg.MODE_HMN == 3:
                             top[tind].reshape(1, 16, 64, 64)
                         if cfg.MODE_HMN == 4:
                             top[tind].reshape(1, 256, 16, 16)
                         if cfg.MODE_HMN == 5:
+                            top[tind].reshape(1, 512, 8, 8)
+                        if cfg.MODE_HMN == 6:
+                            key = 'data_p%d' % (ind+1)
+                            tind = ind + cfg.HMN_K + cfg.OBJ_K
+                            self._name_to_top_map[key] = tind
                             top[tind].reshape(1, 512, 8, 8)
             else:
                 # TODO: add ctx8

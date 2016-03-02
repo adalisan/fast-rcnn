@@ -110,7 +110,7 @@ def get_minibatch(roidb, num_classes):
                 if cfg.MODE_HMN == 0:
                     im_blobs_h = [np.zeros((num_images, 3, 227, 227), dtype=np.float32)
                               for _ in xrange(cfg.HMN_K)]
-                if cfg.MODE_HMN == 1 or cfg.MODE_HMN == 2:
+                if cfg.MODE_HMN == 1 or cfg.MODE_HMN == 2 or cfg.MODE_HMN == 6:
                     im_blobs_h = [np.zeros((num_images, 3, 419, 419), dtype=np.float32)
                               for _ in xrange(cfg.HMN_K)]
                 if cfg.MODE_HMN == 3:
@@ -121,6 +121,9 @@ def get_minibatch(roidb, num_classes):
                               for _ in xrange(cfg.HMN_K)]
                 if cfg.MODE_HMN == 5:
                     im_blobs_h = [np.zeros((num_images, 512, 8, 8), dtype=np.float32)
+                              for _ in xrange(cfg.HMN_K)]
+                if cfg.MODE_HMN == 6:
+                    im_blobs_p = [np.zeros((num_images, 512, 8, 8), dtype=np.float32)
                               for _ in xrange(cfg.HMN_K)]
         else:
             # TODO: add ctx8
@@ -246,7 +249,7 @@ def get_minibatch(roidb, num_classes):
                     for ind in xrange(cfg.HMN_K):
                         if cfg.MODE_HMN == 0:
                             im_focus = _get_one_blob(im, roidb[im_i]['boxes_h'][ind,:])
-                        if cfg.MODE_HMN == 1 or cfg.MODE_HMN == 2:
+                        if cfg.MODE_HMN == 1 or cfg.MODE_HMN == 2 or cfg.MODE_HMN == 6:
                             boxes_h  = roidb[im_i]['boxes_h'][ind,:]
                             bbox_en  = _enlarge_bbox_ctx8(boxes_h, w_org, h_org)
                             bbox_en  = np.around(bbox_en[0,:]).astype(np.uint16)
@@ -255,15 +258,18 @@ def get_minibatch(roidb, num_classes):
                             feat_dir = 'caches/cache_pose_hmap/train2015/'
                         if cfg.MODE_HMN == 4:
                             feat_dir = 'caches/cache_pose_mid/train2015/'
-                        if cfg.MODE_HMN == 5:
+                        if cfg.MODE_HMN == 5 or cfg.MODE_HMN == 6:
                             feat_dir = 'caches/cache_pose_feat_pool_1_8/train2015/'
-                        if cfg.MODE_HMN == 3 or cfg.MODE_HMN == 4 or cfg.MODE_HMN == 5:
+                        if cfg.MODE_HMN == 3 or cfg.MODE_HMN == 4 or cfg.MODE_HMN == 5 or cfg.MODE_HMN == 6:
                             # load feature file
                             im_name = os.path.basename(roidb[im_i]['reg_file_h'])
                             feat_name = im_name.replace('.mat','.hdf5')
                             feat_file = feat_dir + feat_name
                             f = h5py.File(feat_file, 'r')
-                            im_focus = f['feat'][:][ind,:]
+                            if cfg.MODE_HMN == 3 or cfg.MODE_HMN == 4 or cfg.MODE_HMN == 5:
+                                im_focus = f['feat'][:][ind,:]
+                            if cfg.MODE_HMN == 6:
+                                im_focus_p = f['feat'][:][ind,:]
                             # assertion
                             boxes_h_1 = f['boxes'][:][ind,:]  # type float32
                             boxes_h_2 = roidb[im_i]['boxes_h'][ind,:].astype('float32')
@@ -271,6 +277,8 @@ def get_minibatch(roidb, num_classes):
                             assert(np.all(diff <= 1))
                             f.close()
                         im_blobs_h[ind][im_i, :, :, :] = im_focus
+                        if cfg.MODE_HMN == 6:
+                            im_blobs_p[ind][im_i, :, :, :] = im_focus_p
             else:
                 # TODO: add ctx8
                 for ind in xrange(cfg.TOP_K):
@@ -361,6 +369,9 @@ def get_minibatch(roidb, num_classes):
             for ind in xrange(0,cfg.HMN_K):
                 key = 'data_h%d' % (ind+1)
                 blobs[key] = im_blobs_h[ind]
+                if cfg.MODE_HMN == 6:
+                    key = 'data_p%d' % (ind+1)
+                    blobs[key] = im_blobs_p[ind]
         else:
             for ind in xrange(0,cfg.TOP_K):
                 if cfg.FEAT_TYPE == 4:

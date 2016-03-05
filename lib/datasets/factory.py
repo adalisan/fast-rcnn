@@ -10,6 +10,7 @@
 __sets = {}
 
 import datasets.pascal_voc
+import datasets.hico_det
 import numpy as np
 
 def _selective_search_IJCV_top_k(split, year, top_k):
@@ -36,6 +37,23 @@ for top_k in np.arange(1000, 11000, 1000):
             name = 'voc_{}_{}_top_{:d}'.format(year, split, top_k)
             __sets[name] = (lambda split=split, year=year, top_k=top_k:
                     _selective_search_IJCV_top_k(split, year, top_k))
+
+# Set up hico_det for default setting
+for split in ['train2015','test2015']:
+    name = 'hico_det_{}'.format(split)
+    __sets[name] = (lambda split=split, obj_id=None, obj_name=None:
+                    datasets.hico_det(split, obj_id, obj_name))
+
+# Set up hico_det for KO setting
+# file_obj = './fast-rcnn/data/hico/list_object_class'
+# list_obj = [line.strip() for line in open(file_obj)]
+
+# for idx, obj_name in enumerate(list_obj):
+#     obj_id = '{:02d}'.format(idx+1)
+#     for split in ['train2015','test2015']:
+#         name = 'hico_det_{}_{}_{}'.format(split, obj_id, obj_name)
+#         __sets[name] = (lambda split=split, obj_id=obj_id, obj_name=obj_name:
+#                         datasets.hico_det(split, obj_id, obj_name))
 
 def get_imdb(name):
     """Get an imdb (image database) by name."""

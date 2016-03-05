@@ -7,10 +7,11 @@
 
 from .imdb import imdb
 from .pascal_voc import pascal_voc
+from .hico_det import hico_det
 from . import factory
 
 import os.path as osp
-ROOT_DIR = osp.join(osp.dirname(__file__), '..', '..')
+ROOT_DIR = osp.join(osp.dirname(__file__), '..', '..', '..')
 
 # We assume your matlab binary is in your path and called `matlab'.
 # If either is not true, just add it to your path and alias it as matlab, or
@@ -36,7 +37,8 @@ def _which(program):
 
     return None
 
-if _which(MATLAB) is None:
-    msg = ("MATLAB command '{}' not found. "
-           "Please add '{}' to your PATH.").format(MATLAB, MATLAB)
-    raise EnvironmentError(msg)
+# Disable matlab check for BW
+# if _which(MATLAB) is None:
+#     msg = ("MATLAB command '{}' not found. "
+#            "Please add '{}' to your PATH.").format(MATLAB, MATLAB)
+#     raise EnvironmentError(msg)

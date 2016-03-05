@@ -27,6 +27,9 @@ __C = edict()
 #   from fast_rcnn_config import cfg
 cfg = __C
 
+__C.USE_CCL = False
+__C.USE_SCENE = False
+
 #
 # Training options
 #
@@ -77,6 +80,11 @@ __C.TRAIN.SNAPSHOT_INFIX = ''
 # Use a prefetch thread in roi_data_layer.layer
 # So far I haven't found this useful; likely more engineering work is required
 __C.TRAIN.USE_PREFETCH = False
+
+# TODO: Drop if this is not used
+# __C.TRAIN_MODE = 'default'
+__C.TRAIN.FG_OBJ_FRACTION = 0.5
+__C.TRAIN.FG_ROI_FRACTION = 0.25
 
 #
 # Testing options

@@ -19,6 +19,8 @@ import pprint
 import numpy as np
 import sys
 
+import datasets
+
 def parse_args():
     """
     Parse input arguments
@@ -87,6 +89,12 @@ if __name__ == '__main__':
     output_dir = get_output_dir(imdb, None)
     print 'Output will be saved to `{:s}`'.format(output_dir)
 
-    train_net(args.solver, roidb, output_dir,
-              pretrained_model=args.pretrained_model,
-              max_iters=args.max_iters)
+    if type(imdb) is datasets.pascal_voc:
+        train_net(args.solver, roidb, output_dir,
+                  pretrained_model=args.pretrained_model,
+                  max_iters=args.max_iters)
+    if type(imdb) is datasets.hico_det:
+        train_net(args.solver, roidb, output_dir,
+                  pretrained_model=args.pretrained_model,
+                  max_iters=args.max_iters,
+                  obj_hoi_int=imdb.get_obj_hoi_int())

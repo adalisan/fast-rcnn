@@ -10,12 +10,17 @@
 import caffe
 from fast_rcnn.config import cfg
 import roi_data_layer.roidb as rdl_roidb
+import hoi_data_layer.roidb as hdl_roidb
 from utils.timer import Timer
 import numpy as np
 import os
 
 from caffe.proto import caffe_pb2
 import google.protobuf as pb2
+
+import datasets
+import roi_data_layer.layer
+import hoi_data_layer.layer
 
 class SolverWrapper(object):
     """A simple wrapper around Caffe's solver.
@@ -24,14 +29,9 @@ class SolverWrapper(object):
     """
 
     def __init__(self, solver_prototxt, roidb, output_dir,
-                 pretrained_model=None):
+                 pretrained_model=None, obj_hoi_int=None):
         """Initialize the SolverWrapper."""
         self.output_dir = output_dir
-
-        print 'Computing bounding-box regression targets...'
-        self.bbox_means, self.bbox_stds = \
-                rdl_roidb.add_bbox_regression_targets(roidb)
-        print 'done'
 
         self.solver = caffe.SGDSolver(solver_prototxt)
         if pretrained_model is not None:
@@ -43,7 +43,16 @@ class SolverWrapper(object):
         with open(solver_prototxt, 'rt') as f:
             pb2.text_format.Merge(f.read(), self.solver_param)
 
-        self.solver.net.layers[0].set_roidb(roidb)
+        print 'Computing bounding-box regression targets...'
+        if type(self.solver.net.layers[0]) is roi_data_layer.layer.RoIDataLayer:
+            self.bbox_means, self.bbox_stds = \
+                    rdl_roidb.add_bbox_regression_targets(roidb)
+        print 'done'
+
+        if type(self.solver.net.layers[0]) is roi_data_layer.layer.RoIDataLayer:
+            self.solver.net.layers[0].set_roidb(roidb)
+        if type(self.solver.net.layers[0]) is hoi_data_layer.layer.HOIDataLayer:
+            self.solver.net.layers[0].set_roidb(roidb, obj_hoi_int)
 
     def snapshot(self):
         """Take a snapshot of the network after unnormalizing the learned
@@ -104,20 +113,27 @@ def get_training_roidb(imdb):
     """Returns a roidb (Region of Interest database) for use in training."""
     if cfg.TRAIN.USE_FLIPPED:
         print 'Appending horizontally-flipped training examples...'
-        imdb.append_flipped_images()
+        if type(imdb) is datasets.pascal_voc:
+            imdb.append_flipped_images()
+        if type(imdb) is datasets.hico_det:
+            imdb.append_flipped_images_hico_det()
         print 'done'
 
     print 'Preparing training data...'
-    rdl_roidb.prepare_roidb(imdb)
+    if type(imdb) is datasets.pascal_voc:
+        rdl_roidb.prepare_roidb(imdb)
+    if type(imdb) is datasets.hico_det:
+        hdl_roidb.prepare_roidb(imdb)
     print 'done'
 
     return imdb.roidb
 
 def train_net(solver_prototxt, roidb, output_dir,
-              pretrained_model=None, max_iters=40000):
+              pretrained_model=None, max_iters=40000, obj_hoi_int=None):
     """Train a Fast R-CNN network."""
     sw = SolverWrapper(solver_prototxt, roidb, output_dir,
-                       pretrained_model=pretrained_model)
+                       pretrained_model=pretrained_model,
+                       obj_hoi_int=obj_hoi_int)
 
     print 'Solving...'
     sw.train_model(max_iters)

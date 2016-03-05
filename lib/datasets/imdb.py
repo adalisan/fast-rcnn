@@ -109,6 +109,45 @@ class imdb(object):
             self.roidb.append(entry)
         self._image_index = self._image_index * 2
 
+
+    def append_flipped_images_hico_det(self):
+        num_images = self.num_images
+        widths = [PIL.Image.open(self.image_path_at(i)).size[0]
+                  for i in xrange(num_images)]
+        for i in xrange(num_images):
+            roi_fg = []
+            for roi in self.roidb[i]['roi_fg']:
+                boxes = roi['boxes'].copy()
+                boxes = self._flip_pair_boxes(boxes, widths[i])
+                roi_fg.append({'obj_id' : roi['obj_id'],
+                               'boxes' : boxes,
+                               'scores' : roi['scores'],
+                               'gt_classes' : roi['gt_classes'],
+                               'gt_overlaps' : roi['gt_overlaps']})
+            roi_bg = []
+            for roi in self.roidb[i]['roi_bg']:
+                boxes = roi['boxes'].copy()
+                boxes = self._flip_pair_boxes(boxes, widths[i])
+                roi_bg.append({'obj_id' : roi['obj_id'],
+                               'boxes' : boxes,
+                               'scores' : roi['scores']})
+            entry = {'roi_fg' : roi_fg, 'roi_bg' : roi_bg, 'flipped' : True}
+            self.roidb.append(entry)
+        self._image_index = self._image_index * 2
+
+    def _flip_pair_boxes(self, boxes, width):
+        oldx1 = boxes[:, 0].copy()
+        oldx2 = boxes[:, 2].copy()
+        boxes[:, 0] = width - oldx2 - 1
+        boxes[:, 2] = width - oldx1 - 1
+        oldx1 = boxes[:, 4].copy()
+        oldx2 = boxes[:, 6].copy()
+        boxes[:, 4] = width - oldx2 - 1
+        boxes[:, 6] = width - oldx1 - 1
+        assert (boxes[:, 2] >= boxes[:, 0]).all()
+        assert (boxes[:, 6] >= boxes[:, 4]).all()
+        return boxes
+
     def evaluate_recall(self, candidate_boxes, ar_thresh=0.5):
         # Record max overlap value for each gt box
         # Return vector of overlap values
@@ -177,6 +216,58 @@ class imdb(object):
                           'flipped' : False})
         return roidb
 
+    def create_roidb_from_det_list(self, det_list, gt_roidb):
+        assert len(det_list) == self.num_images, \
+                'Number of boxes must match number of ground-truth images'
+        roidb = []
+        for i in xrange(self.num_images):
+            roi_fg = []
+            for roi in det_list[i]['roi_fg']:
+                obj_id = roi['obj_id']
+                boxes = roi['boxes']
+                num_boxes = boxes.shape[0]
+
+                hoi_int = self._obj_hoi_int[obj_id]
+                num_classes = hoi_int[1] - hoi_int[0] + 1
+                overlaps = np.zeros((num_boxes, num_classes), dtype=np.float32)
+
+                if gt_roidb is not None:
+                    gt_roi = gt_roidb[i]['roi']
+                    rid = [ind for ind, t_roi in enumerate(gt_roi)
+                           if t_roi['obj_id'] == obj_id]
+                    # rid can be empty because the hoi is invisible
+                    assert len(rid) == 0 or len(rid) == 1
+                    if len(rid) == 1:
+                        rid = rid[0]
+                        assert num_classes == gt_roi[rid]['gt_classes'].shape[1]
+
+                        gt_boxes = gt_roi[rid]['boxes']
+                        gt_classes = gt_roi[rid]['gt_classes']
+                        ov_h = bbox_overlaps(boxes[:, 0:4].astype(np.float),
+                                             gt_boxes[:, 0:4].astype(np.float))
+                        ov_o = bbox_overlaps(boxes[:, 4:8].astype(np.float),
+                                             gt_boxes[:, 4:8].astype(np.float))
+                        gt_overlaps = np.minimum(ov_h, ov_o)
+
+                        for j in xrange(num_classes):
+                            gt_ind = np.where(gt_classes[:, j])[0]
+                            if gt_ind.size > 0:
+                                argmaxes = gt_overlaps[:, gt_ind].argmax(axis=1)
+                                maxes = gt_overlaps[:, gt_ind].max(axis=1)
+                                I = np.where(maxes > 0)[0]
+                                overlaps[I, j] = maxes[I]
+
+                roi['gt_classes'] = \
+                    np.zeros((num_boxes, num_classes), dtype=np.int32)
+                roi['gt_overlaps'] = scipy.sparse.csr_matrix(overlaps)
+                roi_fg.append(roi)
+
+            roidb.append({'roi_fg' : roi_fg,
+                          'roi_bg' : det_list[i]['roi_bg'],
+                          'flipped' : False})
+
+        return roidb
+
     @staticmethod
     def merge_roidbs(a, b):
         assert len(a) == len(b)
@@ -187,6 +278,29 @@ class imdb(object):
             a[i]['gt_overlaps'] = scipy.sparse.vstack([a[i]['gt_overlaps'],
                                                        b[i]['gt_overlaps']])
         return a
+
+    @staticmethod
+    def merge_roidbs_hico_det(gt, det):
+        assert len(gt) == len(det)
+        for i in xrange(len(gt)):
+            for j in xrange(len(det[i]['roi_fg'])):
+                obj_id = det[i]['roi_fg'][j]['obj_id']
+                rid = [ind for ind, roi in enumerate(gt[i]['roi'])
+                       if roi['obj_id'] == obj_id]
+                assert len(rid) == 0 or len(rid) == 1
+                if len(rid) == 0:
+                    continue
+                rid = rid[0]
+                det[i]['roi_fg'][j]['boxes'] = \
+                    np.vstack((gt[i]['roi'][rid]['boxes'],
+                               det[i]['roi_fg'][j]['boxes']))
+                det[i]['roi_fg'][j]['gt_classes'] = \
+                    np.vstack((gt[i]['roi'][rid]['gt_classes'],
+                               det[i]['roi_fg'][j]['gt_classes']))
+                det[i]['roi_fg'][j]['gt_overlaps'] = scipy.sparse \
+                    .vstack([gt[i]['roi'][rid]['gt_overlaps'],
+                             det[i]['roi_fg'][j]['gt_overlaps']])
+        return det
 
     def competition_mode(self, on):
         """Turn competition mode on or off."""

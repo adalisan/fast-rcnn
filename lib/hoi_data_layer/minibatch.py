@@ -58,6 +58,10 @@ def get_minibatch(roidb, num_classes, obj_hoi_int):
             box_h = im_rois[i, 0:4]
             box_o = im_rois[i, 4:8]
             if cfg.USE_CCL:
+                box_h = _enlarge_bbox_ccl(box_h.astype(np.float), w_im, h_im)
+                box_o = _enlarge_bbox_ccl(box_o.astype(np.float), w_im, h_im)
+                box_h = np.around(box_h).astype(np.uint16)
+                box_o = np.around(box_o).astype(np.uint16)
                 blob_h = _get_one_blob(im, box_h, 419, 419)
                 blob_o = _get_one_blob(im, box_o, 419, 419)
             else:
@@ -212,6 +216,18 @@ def _get_one_blob(im, bbox, w, h):
     channel_swap = (2, 0, 1)
     im_trans = im_trans.transpose(channel_swap)
     return im_trans
+
+def _enlarge_bbox_ccl(bbox, w_im, h_im):
+    # get radius
+    w = bbox[2] - bbox[0] + 1;
+    h = bbox[3] - bbox[1] + 1;
+    r = (w + h) / 2
+    # get enlarged bbox
+    bbox_en = np.array([np.maximum(bbox[0] - 0.5 * r, 0),
+                        np.maximum(bbox[1] - 0.5 * r, 0),
+                        np.minimum(bbox[2] + 0.5 * r, w_im - 1),
+                        np.minimum(bbox[3] + 0.5 * r, h_im - 1)])
+    return bbox_en
 
 # def _get_bbox_regression_labels(bbox_target_data, num_classes):
 #     """Bounding-box regression targets are stored in a compact form in the

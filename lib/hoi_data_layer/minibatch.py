@@ -86,7 +86,7 @@ def get_minibatch(roidb, num_classes, obj_hoi_int):
     blobs = {'data_h': im_blob_h,
              'data_o': im_blob_o,
              'labels': labels_blob}
-             
+
     if cfg.USE_SCENE:
         blobs['data_s'] = im_blob_s
 

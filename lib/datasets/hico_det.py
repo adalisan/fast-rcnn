@@ -51,7 +51,7 @@ class hico_det(datasets.imdb):
             # Default setting
             # Get background object id for each image
             # fg_obj_id is one-based to match the cls in detection files
-            fg_obj_id = [[] for i in xrange(len(list_im))]
+            fg_obj_id = [[] for _ in xrange(len(list_im))]
             index = list_im[0, 0][0]
             det_file = os.path.join(self._det_path,
                                     os.path.splitext(index)[0] + '.mat')
@@ -59,7 +59,7 @@ class hico_det(datasets.imdb):
                 'Detection file not found at: {}'.format(det_file)
             obj_classes = sio.loadmat(det_file)['cls'][0, :]
             obj_classes = [cls[0].replace(' ', '_') for cls in obj_classes]
-            obj_hoi_int = [[] for i in xrange(len(obj_classes))]
+            obj_hoi_int = [[] for _ in xrange(len(obj_classes))]
             for oid, obj_name in enumerate(obj_classes):
                 action_ind = [ind for ind, act in enumerate(list_action[:, 0])
                               if act['nname'][0] == obj_name]
@@ -96,9 +96,21 @@ class hico_det(datasets.imdb):
         self._hoi_obj_id = hoi_obj_id
         self._obj_hoi_int = obj_hoi_int
 
+    def get_fg_obj_id(self):
+        """
+        Return foreground object indices for each image
+        """
+        return self._fg_obj_id
+
+    def get_hoi_obj_id(self):
+        """
+        Return the object index for each HOI class
+        """
+        return self._hoi_obj_id
+
     def get_obj_hoi_int(self):
         """
-        Return hoi classes index interval for each object class
+        Return HOI classes index interval for each object class
         """
         return self._obj_hoi_int
 

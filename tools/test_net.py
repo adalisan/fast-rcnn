@@ -11,12 +11,15 @@
 
 import _init_paths
 from fast_rcnn.test import test_net
+from fast_rcnn.test_hico import test_net_hico
 from fast_rcnn.config import cfg, cfg_from_file, cfg_from_list
 from datasets.factory import get_imdb
 import caffe
 import argparse
 import pprint
 import time, os, sys
+
+import datasets
 
 def parse_args():
     """
@@ -44,6 +47,8 @@ def parse_args():
     parser.add_argument('--set', dest='set_cfgs',
                         help='set config keys', default=None,
                         nargs=argparse.REMAINDER)
+    parser.add_argument('--oid', dest='obj_id',
+                        help='object id', default=None, type=int)
 
     if len(sys.argv) == 1:
         parser.print_help()
@@ -78,4 +83,7 @@ if __name__ == '__main__':
     imdb = get_imdb(args.imdb_name)
     imdb.competition_mode(args.comp_mode)
 
-    test_net(net, imdb)
+    if type(imdb) is datasets.pascal_voc:
+        test_net(net, imdb)
+    if type(imdb) is datasets.hico_det:
+        test_net_hico(net, imdb, args.obj_id)

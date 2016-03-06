@@ -233,16 +233,15 @@ class imdb(object):
 
                 if gt_roidb is not None:
                     gt_roi = gt_roidb[i]['roi']
-                    rid = [ind for ind, t_roi in enumerate(gt_roi)
-                           if t_roi['obj_id'] == obj_id]
-                    # rid can be empty because the hoi is invisible
-                    assert len(rid) == 0 or len(rid) == 1
-                    if len(rid) == 1:
-                        rid = rid[0]
-                        assert num_classes == gt_roi[rid]['gt_classes'].shape[1]
+                    gt_roi = [gtr for gtr in gt_roi if gtr['obj_id'] == obj_id]
+                    # gt_roi can be empty because the hoi is invisible
+                    assert len(gt_roi) == 0 or len(gt_roi) == 1
+                    if len(gt_roi) == 1:
+                        gt_roi = gt_roi[0]
+                        assert num_classes == gt_roi['gt_classes'].shape[1]
 
-                        gt_boxes = gt_roi[rid]['boxes']
-                        gt_classes = gt_roi[rid]['gt_classes']
+                        gt_boxes = gt_roi['boxes']
+                        gt_classes = gt_roi['gt_classes']
                         ov_h = bbox_overlaps(boxes[:, 0:4].astype(np.float),
                                              gt_boxes[:, 0:4].astype(np.float))
                         ov_o = bbox_overlaps(boxes[:, 4:8].astype(np.float),
@@ -285,20 +284,19 @@ class imdb(object):
         for i in xrange(len(gt)):
             for j in xrange(len(det[i]['roi_fg'])):
                 obj_id = det[i]['roi_fg'][j]['obj_id']
-                rid = [ind for ind, roi in enumerate(gt[i]['roi'])
-                       if roi['obj_id'] == obj_id]
-                assert len(rid) == 0 or len(rid) == 1
-                if len(rid) == 0:
+                roi = [roi for roi in gt[i]['roi'] if roi['obj_id'] == obj_id]
+                assert len(roi) == 0 or len(roi) == 1
+                if len(roi) == 0:
                     continue
-                rid = rid[0]
+                roi = roi[0]
                 det[i]['roi_fg'][j]['boxes'] = \
-                    np.vstack((gt[i]['roi'][rid]['boxes'],
+                    np.vstack((roi['boxes'],
                                det[i]['roi_fg'][j]['boxes']))
                 det[i]['roi_fg'][j]['gt_classes'] = \
-                    np.vstack((gt[i]['roi'][rid]['gt_classes'],
+                    np.vstack((roi['gt_classes'],
                                det[i]['roi_fg'][j]['gt_classes']))
                 det[i]['roi_fg'][j]['gt_overlaps'] = scipy.sparse \
-                    .vstack([gt[i]['roi'][rid]['gt_overlaps'],
+                    .vstack([roi['gt_overlaps'],
                              det[i]['roi_fg'][j]['gt_overlaps']])
         return det
 

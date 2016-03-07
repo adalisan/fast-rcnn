@@ -12,6 +12,8 @@ import numpy.random as npr
 import cv2
 from fast_rcnn.config import cfg
 
+import hoi_data_layer.spatial_relation as hdl_sr
+
 def get_minibatch(roidb, num_classes, obj_hoi_int):
     """Given a roidb, construct a minibatch sampled from it."""
     num_images = len(roidb)
@@ -31,6 +33,8 @@ def get_minibatch(roidb, num_classes, obj_hoi_int):
         im_blob_o = np.zeros((0, 3, 227, 227), dtype=np.float32)
     if cfg.USE_SCENE:
         im_blob_s = np.zeros((0, 3, 227, 227), dtype=np.float32)
+    if cfg.USE_SPATIAL > 0:
+        im_blob_sr = np.zeros((0, 2, 64, 64), dtype=np.float32)
 
     # Now, build the region of interest and label blobs
     labels_blob = np.zeros((0, num_classes), dtype=np.float32)
@@ -73,6 +77,14 @@ def get_minibatch(roidb, num_classes, obj_hoi_int):
                 box_s = np.array((0, 0, w_im-1, h_im-1), dtype='uint16')
                 blob_s = _get_one_blob(im, box_s, 227, 227)
                 im_blob_s = np.vstack((im_blob_s, blob_s[None, :]))
+            if cfg.USE_SPATIAL > 0:
+                if cfg.USE_SPATIAL == 1:
+                    # do not keep aspect ratio
+                    blob_sr = hdl_sr.get_map_no_pad(box_h, box_o, 64)
+                if cfg.USE_SPATIAL == 2:
+                    # keep aspect ratio
+                    blob_sr = hdl_sr.get_map_pad(box_h, box_o, 64)
+                im_blob_sr = np.vstack((im_blob_sr, blob_sr[None, :]))
 
         # Add to labels, bbox targets, and bbox loss blobs
         labels_blob = np.vstack((labels_blob, labels))
@@ -89,6 +101,8 @@ def get_minibatch(roidb, num_classes, obj_hoi_int):
 
     if cfg.USE_SCENE:
         blobs['data_s'] = im_blob_s
+    if cfg.USE_SPATIAL > 0:
+        blobs['data_sr'] = im_blob_sr
 
     # if cfg.TRAIN.BBOX_REG:
     #     blobs['bbox_targets'] = bbox_targets_blob

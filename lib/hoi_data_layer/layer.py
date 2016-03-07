@@ -76,8 +76,7 @@ class HOIDataLayer(caffe.Layer):
 
         self._name_to_top_map = {
             'data_h': 0,
-            'data_o': 1,
-            'labels': 2}
+            'data_o': 1}
 
         # data blob: holds a batch of N images, each with 3 channels
         if cfg.USE_CCL:
@@ -87,15 +86,19 @@ class HOIDataLayer(caffe.Layer):
             top[0].reshape(1, 3, 227, 227)
             top[1].reshape(1, 3, 227, 227)
 
-        # labels blob: R categorical labels in [0, ..., K] for K foreground
-        # classes plus background
-        top[2].reshape(1, self._num_classes)
-
         if cfg.USE_SCENE:
-            self._name_to_top_map['data_s'] = 2
-            self._name_to_top_map['labels'] = 3
-            top[2].reshape(1, 3, 227, 227)
-            top[3].reshape(1, self._num_classes)
+            ind = len(self._name_to_top_map.keys())
+            self._name_to_top_map['data_s'] = ind
+            top[ind].reshape(1, 3, 227, 227)
+        if cfg.USE_SPATIAL > 0:
+            ind = len(self._name_to_top_map.keys())
+            self._name_to_top_map['data_sr'] = ind
+            top[ind].reshape(1, 2, 64, 64)
+
+        # labels blob: R categorical binary labels in [0, ..., K-1]
+        ind = len(self._name_to_top_map.keys())
+        self._name_to_top_map['labels'] = ind
+        top[ind].reshape(1, self._num_classes)
 
         # if cfg.TRAIN.BBOX_REG:
         #     self._name_to_top_map['bbox_targets'] = 4

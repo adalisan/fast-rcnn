@@ -169,7 +169,8 @@ __C.TEST.BBOX_REG = True
 __C.DEDUP_BOXES = 1./16.
 
 # Pixel mean values (BGR order) as a (1, 1, 3) array
-# These are the values originally used for training VGG16
+# We use the same pixel mean for all networks even though it's not exactly what
+# they were trained with
 __C.PIXEL_MEANS = np.array([[[102.9801, 115.9465, 122.7717]]])
 
 # For reproducibility
@@ -231,3 +232,25 @@ def cfg_from_file(filename):
         yaml_cfg = edict(yaml.load(f))
 
     _merge_a_into_b(yaml_cfg, __C)
+
+def cfg_from_list(cfg_list):
+    """Set config keys via list (e.g., from command line)."""
+    from ast import literal_eval
+    assert len(cfg_list) % 2 == 0
+    for k, v in zip(cfg_list[0::2], cfg_list[1::2]):
+        key_list = k.split('.')
+        d = __C
+        for subkey in key_list[:-1]:
+            assert d.has_key(subkey)
+            d = d[subkey]
+        subkey = key_list[-1]
+        assert d.has_key(subkey)
+        try:
+            value = literal_eval(v)
+        except:
+            # handle the case when v is a string literal
+            value = v
+        assert type(value) == type(d[subkey]), \
+            'type {} does not match original type {}'.format(
+            type(value), type(d[subkey]))
+        d[subkey] = value

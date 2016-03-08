@@ -11,8 +11,9 @@
 
 import _init_paths
 from fast_rcnn.test import test_net
-from fast_rcnn.config import cfg, cfg_from_file
+from fast_rcnn.config import cfg, cfg_from_file, cfg_from_list
 from fast_rcnn.test_hico import test_net_hico
+from fast_rcnn.config import cfg, cfg_from_file
 from datasets.factory import get_imdb
 import caffe
 import argparse
@@ -42,6 +43,9 @@ def parse_args():
                         default='voc_2007_test', type=str)
     parser.add_argument('--comp', dest='comp_mode', help='competition mode',
                         action='store_true')
+    parser.add_argument('--set', dest='set_cfgs',
+                        help='set config keys', default=None,
+                        nargs=argparse.REMAINDER)
     parser.add_argument('--feat', dest='feat_root',
                         help='fc7 feature cache dir',
                         default=None, type=str)
@@ -61,6 +65,8 @@ if __name__ == '__main__':
 
     if args.cfg_file is not None:
         cfg_from_file(args.cfg_file)
+    if args.set_cfgs is not None:
+        cfg_from_list(args.set_cfgs)
 
     print('Using config:')
     pprint.pprint(cfg)

@@ -303,7 +303,8 @@ def _get_blobs_focus_ho(im, rois_o, rois_h, im_name):
             if cfg.MODE_HMN == 0:
                 im_blob = np.zeros((1, 3, 227, 227), dtype=np.float32)
                 im_blob[0, :, :, :] = _get_one_blob(im, rois_h[ind,:])
-            if cfg.MODE_HMN == 1 or cfg.MODE_HMN == 2 or cfg.MODE_HMN == 6:
+            if cfg.MODE_HMN == 1 or cfg.MODE_HMN == 2 or \
+               cfg.MODE_HMN == 6 or cfg.MODE_HMN == 7:
                 boxes_h = rois_h[ind,:]
                 bbox_en = _enlarge_bbox_ctx8(boxes_h, w_org, h_org)
                 bbox_en = np.around(bbox_en[0,:]).astype(np.uint16)
@@ -318,17 +319,18 @@ def _get_blobs_focus_ho(im, rois_o, rois_h, im_name):
             if cfg.MODE_HMN == 5:
                 im_blob = np.zeros((1, 512, 8, 8), dtype=np.float32)
                 feat_dir = 'caches/cache_pose_feat_pool_1_8/test2015/'
-            if cfg.MODE_HMN == 6:
+            if cfg.MODE_HMN == 6 or cfg.MODE_HMN == 7:
                 im_blob_p = np.zeros((1, 512, 8, 8), dtype=np.float32)
                 feat_dir = 'caches/cache_pose_feat_pool_1_8/test2015/'
-            if cfg.MODE_HMN == 3 or cfg.MODE_HMN == 4 or cfg.MODE_HMN == 5 or cfg.MODE_HMN == 6:
+            if cfg.MODE_HMN == 3 or cfg.MODE_HMN == 4 or cfg.MODE_HMN == 5 or \
+               cfg.MODE_HMN == 6 or cfg.MODE_HMN == 7:
                 # load feature file
                 feat_name = im_name.replace('.mat','.hdf5')
                 feat_file = feat_dir + feat_name
                 f = h5py.File(feat_file, 'r')
                 if cfg.MODE_HMN == 3 or cfg.MODE_HMN == 4 or cfg.MODE_HMN == 5:
                     im_blob[0, :, :, :] = f['feat'][:][ind,:]
-                if cfg.MODE_HMN == 6:
+                if cfg.MODE_HMN == 6 or cfg.MODE_HMN == 7:
                     im_blob_p[0, :, :, :] = f['feat'][:][ind,:]
                 # assertion
                 boxes_h_1 = f['boxes'][:][ind,:]  # type float32
@@ -340,7 +342,7 @@ def _get_blobs_focus_ho(im, rois_o, rois_h, im_name):
             # if cfg.MODE_HMN == 4:
             key = 'data_h%d' % (ind+1)
             blobs[key] = im_blob
-            if cfg.MODE_HMN == 6:
+            if cfg.MODE_HMN == 6 or cfg.MODE_HMN == 7:
                 key = 'data_p%d' % (ind+1)
                 blobs[key] = im_blob_p
 

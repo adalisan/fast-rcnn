@@ -110,7 +110,8 @@ def get_minibatch(roidb, num_classes):
                 if cfg.MODE_HMN == 0:
                     im_blobs_h = [np.zeros((num_images, 3, 227, 227), dtype=np.float32)
                               for _ in xrange(cfg.HMN_K)]
-                if cfg.MODE_HMN == 1 or cfg.MODE_HMN == 2 or cfg.MODE_HMN == 6:
+                if cfg.MODE_HMN == 1 or cfg.MODE_HMN == 2 or \
+                   cfg.MODE_HMN == 6 or cfg.MODE_HMN == 7:
                     im_blobs_h = [np.zeros((num_images, 3, 419, 419), dtype=np.float32)
                               for _ in xrange(cfg.HMN_K)]
                 if cfg.MODE_HMN == 3:
@@ -371,7 +372,7 @@ def get_minibatch(roidb, num_classes):
             for ind in xrange(0,cfg.HMN_K):
                 key = 'data_h%d' % (ind+1)
                 blobs[key] = im_blobs_h[ind]
-                if cfg.MODE_HMN == 6:
+                if cfg.MODE_HMN == 6 or cfg.MODE_HMN == 7:
                     key = 'data_p%d' % (ind+1)
                     blobs[key] = im_blobs_p[ind]
         else:

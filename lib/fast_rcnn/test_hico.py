@@ -22,6 +22,12 @@ import os
 import scipy.io as sio
 import hoi_data_layer.spatial_relation as hdl_sr
 
+def _get_union_bbox(box1, box2):
+    return np.array( \
+        (np.minimum(box1[0], box2[0]), np.minimum(box1[1], box2[1]),
+         np.maximum(box1[2], box2[2]), np.maximum(box1[3], box2[3])),
+        dtype=np.uint16)
+
 def _enlarge_bbox_ccl(bbox, w_im, h_im):
     # get radius
     w = bbox[2] - bbox[0] + 1;
@@ -118,6 +124,8 @@ def _foward_im_roi(net, im, roi):
         score_o_blob = np.zeros((num_boxes, 1), dtype=np.float32)
     # if cfg.SHARE_V:
     #     # no additional blobs needed
+    if cfg.USE_UNION:
+        im_blob_ho = np.zeros((num_boxes, 3, 227, 227), dtype=np.float32)
 
     for i in xrange(num_boxes):
         box_h = boxes[i, 0:4]
@@ -152,6 +160,10 @@ def _foward_im_roi(net, im, roi):
             score_o_blob[i, :] = score_o
         # if cfg.SHARE_V:
         #     # no additional blobs needed
+        if cfg.USE_UNION:
+            box_ho = _get_union_bbox(box_h, box_o)
+            blob_ho = _get_one_blob(im, box_ho, 227, 227)
+            im_blob_ho[i, :, :, :] = blob_ho[None, :]
 
     blobs = {'data_h': im_blob_h,
              'data_o': im_blob_o}
@@ -163,18 +175,22 @@ def _foward_im_roi(net, im, roi):
         blobs['score_o'] = score_o_blob
     # if cfg.SHARE_V:
     #     # no additional blobs needed
+    if cfg.USE_UNION:
+        blobs = {'data_ho': im_blob_ho}
 
     # reshape network inputs
-    net.blobs['data_h'].reshape(*(blobs['data_h'].shape))
-    net.blobs['data_o'].reshape(*(blobs['data_o'].shape))
-    if cfg.USE_SCENE:
-        net.blobs['data_s'].reshape(*(blobs['data_s'].shape))
-    if cfg.USE_SPATIAL:
-        net.blobs['data_sr'].reshape(*(blobs['data_sr'].shape))
-    if cfg.SHARE_O:
-        net.blobs['score_o'].reshape(*(blobs['score_o'].shape))
-    # if cfg.SHARE_V:
-    #     # no additional blobs needed
+    # net.blobs['data_h'].reshape(*(blobs['data_h'].shape))
+    # net.blobs['data_o'].reshape(*(blobs['data_o'].shape))
+    # if cfg.USE_SCENE:
+    #     net.blobs['data_s'].reshape(*(blobs['data_s'].shape))
+    # if cfg.USE_SPATIAL:
+    #     net.blobs['data_sr'].reshape(*(blobs['data_sr'].shape))
+    # if cfg.SHARE_O:
+    #     net.blobs['score_o'].reshape(*(blobs['score_o'].shape))
+    # # if cfg.SHARE_V:
+    # #     # no additional blobs needed
+    for key in blobs:
+        net.blobs[key].reshape(*(blobs[key].shape))
 
     blobs_out = net.forward(**(blobs))
 

@@ -39,6 +39,8 @@ def get_minibatch(roidb, num_classes, obj_hoi_int):
         score_o_blob = np.zeros((0, 1), dtype=np.float32)
     # if cfg.SHARE_V:
     #     # no additional blobs needed
+    if cfg.USE_UNION:
+        im_blob_ho = np.zeros((0, 3, 227, 227), dtype=np.float32)
 
     # Now, build the region of interest and label blobs
     labels_blob = np.zeros((0, num_classes), dtype=np.float32)
@@ -95,6 +97,10 @@ def get_minibatch(roidb, num_classes, obj_hoi_int):
                 score_o_blob = np.vstack((score_o_blob, score_o))
             # if cfg.SHARE_V:
             #     # no additional blobs needed
+            if cfg.USE_UNION:
+                box_ho = _get_union_bbox(box_h, box_o)
+                blob_ho = _get_one_blob(im, box_ho, 227, 227)
+                im_blob_ho = np.vstack((im_blob_ho, blob_ho[None, :]))
 
         # Add to labels, bbox targets, and bbox loss blobs
         labels_blob = np.vstack((labels_blob, labels))
@@ -117,6 +123,8 @@ def get_minibatch(roidb, num_classes, obj_hoi_int):
         blobs['score_o'] = score_o_blob
     # if cfg.SHARE_V:
     #     # no additional blobs needed
+    if cfg.USE_UNION:
+        blobs = {'data_ho' : im_blob_ho, 'labels' : labels_blob}
 
     # if cfg.TRAIN.BBOX_REG:
     #     blobs['bbox_targets'] = bbox_targets_blob
@@ -263,6 +271,12 @@ def _enlarge_bbox_ccl(bbox, w_im, h_im):
                         np.minimum(bbox[2] + 0.5 * r, w_im - 1),
                         np.minimum(bbox[3] + 0.5 * r, h_im - 1)])
     return bbox_en
+
+def _get_union_bbox(box1, box2):
+    return np.array( \
+        (np.minimum(box1[0], box2[0]), np.minimum(box1[1], box2[1]),
+         np.maximum(box1[2], box2[2]), np.maximum(box1[3], box2[3])),
+        dtype=np.uint16)
 
 # def _get_bbox_regression_labels(bbox_target_data, num_classes):
 #     """Bounding-box regression targets are stored in a compact form in the

@@ -100,6 +100,12 @@ class HOIDataLayer(caffe.Layer):
             top[ind].reshape(1, 1)
         # if cfg.SHARE_V:
         #     # no additional inputs needed
+        if cfg.USE_UNION:
+            assert not cfg.USE_SCENE
+            assert not cfg.USE_SPATIAL
+            assert not cfg.SHARE_O
+            assert not cfg.SHARE_V
+            self._name_to_top_map = {'data_ho': 0}
 
         # labels blob: R categorical binary labels in [0, ..., K-1]
         ind = len(self._name_to_top_map.keys())

@@ -30,6 +30,8 @@ cfg = __C
 __C.USE_CCL = False
 __C.USE_SCENE = False
 __C.USE_SPATIAL = 0
+__C.SHARE_O = False
+__C.SHARE_V = False
 
 #
 # Training options

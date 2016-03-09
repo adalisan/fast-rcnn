@@ -94,6 +94,12 @@ class HOIDataLayer(caffe.Layer):
             ind = len(self._name_to_top_map.keys())
             self._name_to_top_map['data_sr'] = ind
             top[ind].reshape(1, 2, 64, 64)
+        if cfg.SHARE_O:
+            ind = len(self._name_to_top_map.keys())
+            self._name_to_top_map['score_o'] = ind
+            top[ind].reshape(1, 1)
+        # if cfg.SHARE_V:
+        #     # no additional inputs needed
 
         # labels blob: R categorical binary labels in [0, ..., K-1]
         ind = len(self._name_to_top_map.keys())

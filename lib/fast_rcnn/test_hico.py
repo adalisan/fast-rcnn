@@ -20,6 +20,7 @@ from utils.blob import im_list_to_blob
 import os
 
 import scipy.io as sio
+import hoi_data_layer.spatial_relation as hdl_sr
 
 def _enlarge_bbox_ccl(bbox, w_im, h_im):
     # get radius
@@ -94,10 +95,13 @@ def _get_one_blob(im, bbox, w, h):
 #     boxes[:, 3::4] = np.minimum(boxes[:, 3::4], im_shape[0] - 1)
 #     return boxes
 
-def _foward_im_boxes(net, im, boxes):
+def _foward_im_roi(net, im, roi):
     """Run forward pass and return scores given boxes."""
     h_im = im.shape[0]
     w_im = im.shape[1]
+
+    boxes = roi['boxes']
+    scores = roi['scores']
 
     num_boxes = boxes.shape[0]
     if cfg.USE_CCL:
@@ -108,6 +112,12 @@ def _foward_im_boxes(net, im, boxes):
         im_blob_o = np.zeros((num_boxes, 3, 227, 227), dtype=np.float32)
     if cfg.USE_SCENE:
         im_blob_s = np.zeros((num_boxes, 3, 227, 227), dtype=np.float32)
+    if cfg.USE_SPATIAL > 0:
+        im_blob_sr = np.zeros((num_boxes, 2, 64, 64), dtype=np.float32)
+    if cfg.SHARE_O:
+        score_o_blob = np.zeros((num_boxes, 1), dtype=np.float32)
+    # if cfg.SHARE_V:
+    #     # no additional blobs needed
 
     for i in xrange(num_boxes):
         box_h = boxes[i, 0:4]
@@ -128,25 +138,51 @@ def _foward_im_boxes(net, im, boxes):
             box_s = np.array((0, 0, w_im-1, h_im-1), dtype='uint16')
             blob_s = _get_one_blob(im, box_s, 227, 227)
             im_blob_s[i, :, :, :] = blob_s[None, :]
+        if cfg.USE_SPATIAL > 0:
+            if cfg.USE_SPATIAL == 1:
+                # do not keep aspect ratio
+                blob_sr = hdl_sr.get_map_no_pad(box_h, box_o, 64)
+            if cfg.USE_SPATIAL == 2:
+                # keep aspect ratio
+                blob_sr = hdl_sr.get_map_pad(box_h, box_o, 64)
+            im_blob_sr[i, :, :, :] = blob_sr[None, :]
+        if cfg.SHARE_O:
+            # use natural log of object detection scores
+            score_o = np.log(scores[i, 1])
+            score_o_blob[i, :] = score_o
+        # if cfg.SHARE_V:
+        #     # no additional blobs needed
 
     blobs = {'data_h': im_blob_h,
              'data_o': im_blob_o}
     if cfg.USE_SCENE:
         blobs['data_s'] = im_blob_s
+    if cfg.USE_SPATIAL > 0:
+        blobs['data_sr'] = im_blob_sr
+    if cfg.SHARE_O:
+        blobs['score_o'] = score_o_blob
+    # if cfg.SHARE_V:
+    #     # no additional blobs needed
 
     # reshape network inputs
     net.blobs['data_h'].reshape(*(blobs['data_h'].shape))
     net.blobs['data_o'].reshape(*(blobs['data_o'].shape))
     if cfg.USE_SCENE:
         net.blobs['data_s'].reshape(*(blobs['data_s'].shape))
+    if cfg.USE_SPATIAL:
+        net.blobs['data_sr'].reshape(*(blobs['data_sr'].shape))
+    if cfg.SHARE_O:
+        net.blobs['score_o'].reshape(*(blobs['score_o'].shape))
+    # if cfg.SHARE_V:
+    #     # no additional blobs needed
 
     blobs_out = net.forward(**(blobs))
 
-    scores = net.blobs['cls_prob'].data
+    probs = net.blobs['cls_prob'].data
 
-    return scores
+    return probs
 
-def im_detect(net, im, boxes):
+def im_detect(net, im, roi):
     """Detect object classes in an image given object proposals.
 
     Arguments:
@@ -188,7 +224,7 @@ def im_detect(net, im, boxes):
 
     # return {'det_fg' : det_fg, 'det_bg' : det_bg}
 
-    return _foward_im_boxes(net, im, boxes)
+    return _foward_im_roi(net, im, roi)
     
 
 def vis_detections(im, class_name, dets, thresh=0.3):
@@ -285,7 +321,7 @@ def test_net_hico(net, imdb, obj_id):
         roi = roi[0]
 
         _t['im_detect'].tic()
-        scores = im_detect(net, im, roi['boxes'])
+        scores = im_detect(net, im, roi)
         _t['im_detect'].toc()
 
         _t['misc'].tic()

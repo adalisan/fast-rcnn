@@ -298,6 +298,11 @@ class imdb(object):
                 det[i]['roi_fg'][j]['gt_overlaps'] = scipy.sparse \
                     .vstack([roi['gt_overlaps'],
                              det[i]['roi_fg'][j]['gt_overlaps']])
+                # Set the detection score of GT boxes to 1. This might be
+                # problematic.
+                det[i]['roi_fg'][j]['scores'] = np.vstack( \
+                    (np.ones((roi['boxes'].shape[0], 2), dtype=np.float32),
+                     det[i]['roi_fg'][j]['scores']))
         return det
 
     def competition_mode(self, on):

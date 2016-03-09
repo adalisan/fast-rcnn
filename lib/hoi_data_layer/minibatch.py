@@ -35,6 +35,10 @@ def get_minibatch(roidb, num_classes, obj_hoi_int):
         im_blob_s = np.zeros((0, 3, 227, 227), dtype=np.float32)
     if cfg.USE_SPATIAL > 0:
         im_blob_sr = np.zeros((0, 2, 64, 64), dtype=np.float32)
+    if cfg.SHARE_O:
+        score_o_blob = np.zeros((0, 1), dtype=np.float32)
+    # if cfg.SHARE_V:
+    #     # no additional blobs needed
 
     # Now, build the region of interest and label blobs
     labels_blob = np.zeros((0, num_classes), dtype=np.float32)
@@ -53,7 +57,7 @@ def get_minibatch(roidb, num_classes, obj_hoi_int):
         # labels, max_overlaps, im_rois, bbox_targets, bbox_loss \
         #     = _sample_rois(roidb[im_i], fg_rois_per_image, rois_per_image,
         #                    num_classes)
-        labels, im_rois \
+        labels, im_rois, scores \
             = _sample_rois(roidb[im_i], fg_obj_per_image, fg_roi_per_image,
                            rois_per_image, num_classes, obj_hoi_int)
 
@@ -85,6 +89,12 @@ def get_minibatch(roidb, num_classes, obj_hoi_int):
                     # keep aspect ratio
                     blob_sr = hdl_sr.get_map_pad(box_h, box_o, 64)
                 im_blob_sr = np.vstack((im_blob_sr, blob_sr[None, :]))
+            if cfg.SHARE_O:
+                # Use natural log of object detection scores
+                score_o = np.log(scores[i, 1])
+                score_o_blob = np.vstack((score_o_blob, score_o))
+            # if cfg.SHARE_V:
+            #     # no additional blobs needed
 
         # Add to labels, bbox targets, and bbox loss blobs
         labels_blob = np.vstack((labels_blob, labels))
@@ -103,6 +113,10 @@ def get_minibatch(roidb, num_classes, obj_hoi_int):
         blobs['data_s'] = im_blob_s
     if cfg.USE_SPATIAL > 0:
         blobs['data_sr'] = im_blob_sr
+    if cfg.SHARE_O:
+        blobs['score_o'] = score_o_blob
+    # if cfg.SHARE_V:
+    #     # no additional blobs needed
 
     # if cfg.TRAIN.BBOX_REG:
     #     blobs['bbox_targets'] = bbox_targets_blob
@@ -176,10 +190,11 @@ def _sample_rois(roidb, fg_obj_per_image, fg_roi_per_image, rois_per_image,
         # Should not reach here
         raise Exception('Empty background object regions. Not expected!')
 
-    # Get sampled labels and boxes
+    # Get sampled labels, boxes, detection scores
     # foreground RoIs
     lbls_fg_roi = np.zeros((fg_roi_per_this_image, num_classes), dtype='uint8')
     rois_fg_roi = np.zeros((fg_roi_per_this_image, 8), dtype='uint16')
+    scrs_fg_roi = np.zeros((fg_roi_per_this_image, 2), dtype='float32')
     for i, ind in enumerate(fg_roi_smp_ind):
         rid = fg_roi_inds[ind, 0]
         bid = fg_roi_inds[ind, 1]
@@ -188,9 +203,11 @@ def _sample_rois(roidb, fg_obj_per_image, fg_roi_per_image, rois_per_image,
         eid = obj_hoi_int[obj_id][1]+1
         lbls_fg_roi[i, sid:eid] = roi_fg[rid]['classes'][bid, :]
         rois_fg_roi[i, :] = roi_fg[rid]['boxes'][bid, :]
+        scrs_fg_roi[i, :] = roi_fg[rid]['scores'][bid, :]
     # background RoIs
     lbls_bg_roi = np.zeros((bg_roi_per_this_image, num_classes), dtype='uint8')
     rois_bg_roi = np.zeros((bg_roi_per_this_image, 8), dtype='uint16')
+    scrs_bg_roi = np.zeros((bg_roi_per_this_image, 2), dtype='float32')
     for i, ind in enumerate(bg_roi_smp_ind):
         rid = bg_roi_inds[ind, 0]
         bid = bg_roi_inds[ind, 1]
@@ -199,23 +216,27 @@ def _sample_rois(roidb, fg_obj_per_image, fg_roi_per_image, rois_per_image,
         eid = obj_hoi_int[obj_id][1]+1
         lbls_bg_roi[i, sid:eid] = roi_fg[rid]['classes'][bid, :]
         rois_bg_roi[i, :] = roi_fg[rid]['boxes'][bid, :]
+        scrs_bg_roi[i, :] = roi_fg[rid]['scores'][bid, :]
     # background RoIs
     lbls_bg_obj = np.zeros((bg_obj_per_this_image, num_classes), dtype='uint8')
     rois_bg_obj = np.zeros((bg_obj_per_this_image, 8), dtype='uint16')
+    scrs_bg_obj = np.zeros((bg_obj_per_this_image, 2), dtype='float32')
     for i, ind in enumerate(bg_obj_smp_ind):
         rid = bg_obj_inds[ind, 0]
         bid = bg_obj_inds[ind, 1]
         rois_bg_obj[i, :] = roi_bg[rid]['boxes'][bid, :]
+        scrs_bg_obj[i, :] = roi_bg[rid]['scores'][bid, :]
     # Stack arrays
     labels = np.vstack((lbls_fg_roi, lbls_bg_roi, lbls_bg_obj))
     rois = np.vstack((rois_fg_roi, rois_bg_roi, rois_bg_obj))
+    scores = np.vstack((scrs_fg_roi, scrs_bg_roi, scrs_bg_obj))
 
     # bbox_targets, bbox_loss_weights = \
     #         _get_bbox_regression_labels(roidb['bbox_targets'][keep_inds, :],
     #                                     num_classes)
 
     # return labels, overlaps, rois, bbox_targets, bbox_loss_weights
-    return labels, rois
+    return labels, rois, scores
 
 def _get_one_blob(im, bbox, w, h):
     # crop image

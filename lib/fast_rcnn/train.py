@@ -54,6 +54,13 @@ class SolverWrapper(object):
         if type(self.solver.net.layers[0]) is hoi_data_layer.layer.HOIDataLayer:
             self.solver.net.layers[0].set_roidb(roidb, obj_hoi_int)
 
+        if type(self.solver.net.layers[0]) is hoi_data_layer.layer.HOIDataLayer:
+            lid = [ind for ind, name in enumerate(self.solver.net._layer_names)
+                   if name == 'loss_cls']
+            assert len(lid) == 1
+            ltype = self.solver.net.layers[lid[0]].type
+            self.solver.net.layers[0].set_ltype(ltype)
+
     def snapshot(self):
         """Take a snapshot of the network after unnormalizing the learned
         bounding-box regression weights. This enables easy use at test-time.

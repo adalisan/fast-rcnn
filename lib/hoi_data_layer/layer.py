@@ -45,7 +45,8 @@ class HOIDataLayer(caffe.Layer):
         # else:
         db_inds = self._get_next_minibatch_inds()
         minibatch_db = [self._roidb[i] for i in db_inds]
-        return get_minibatch(minibatch_db, self._num_classes, self._obj_hoi_int)
+        return get_minibatch(minibatch_db, self._num_classes, self._obj_hoi_int,
+                             self._ltype)
 
     def set_roidb(self, roidb, obj_hoi_int):
         """Set the roidb to be used by this layer during training."""
@@ -65,6 +66,14 @@ class HOIDataLayer(caffe.Layer):
         #         self._prefetch_process.join()
         #     import atexit
         #     atexit.register(cleanup)
+
+    def set_ltype(self, ltype):
+        """Set the loss type for adjusting the labels."""
+        assert ltype == 'SigmoidCrossEntropyLoss' or \
+               ltype == 'MultiLabelLoss', \
+               'currently only supports SigmoidCrossEntropyLoss ' \
+               'and MultiLabelLoss for the classification loss.'
+        self._ltype = ltype
 
     def setup(self, bottom, top):
         """Setup the HOIDataLayer."""

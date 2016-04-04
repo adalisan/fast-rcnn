@@ -14,7 +14,7 @@ from fast_rcnn.config import cfg
 
 import hoi_data_layer.spatial_relation as hdl_sr
 
-def get_minibatch(roidb, num_classes, obj_hoi_int):
+def get_minibatch(roidb, num_classes, obj_hoi_int, ltype):
     """Given a roidb, construct a minibatch sampled from it."""
     num_images = len(roidb)
     assert(cfg.TRAIN.BATCH_SIZE % num_images == 0), \
@@ -61,7 +61,7 @@ def get_minibatch(roidb, num_classes, obj_hoi_int):
         #                    num_classes)
         labels, im_rois, scores \
             = _sample_rois(roidb[im_i], fg_obj_per_image, fg_roi_per_image,
-                           rois_per_image, num_classes, obj_hoi_int)
+                           rois_per_image, num_classes, obj_hoi_int, ltype)
 
         # Add to RoIs blob
         for i in xrange(labels.shape[0]):
@@ -133,7 +133,7 @@ def get_minibatch(roidb, num_classes, obj_hoi_int):
     return blobs
 
 def _sample_rois(roidb, fg_obj_per_image, fg_roi_per_image, rois_per_image, 
-                 num_classes, obj_hoi_int):
+                 num_classes, obj_hoi_int, ltype):
     """Generate a random sample of RoIs comprising foreground and background
     examples.
     """
@@ -200,7 +200,7 @@ def _sample_rois(roidb, fg_obj_per_image, fg_roi_per_image, rois_per_image,
 
     # Get sampled labels, boxes, detection scores
     # foreground RoIs
-    lbls_fg_roi = np.zeros((fg_roi_per_this_image, num_classes), dtype='uint8')
+    lbls_fg_roi = np.zeros((fg_roi_per_this_image, num_classes), dtype='int32')
     rois_fg_roi = np.zeros((fg_roi_per_this_image, 8), dtype='uint16')
     scrs_fg_roi = np.zeros((fg_roi_per_this_image, 2), dtype='float32')
     for i, ind in enumerate(fg_roi_smp_ind):
@@ -209,29 +209,42 @@ def _sample_rois(roidb, fg_obj_per_image, fg_roi_per_image, rois_per_image,
         obj_id = roi_fg[rid]['obj_id']
         sid = obj_hoi_int[obj_id][0]
         eid = obj_hoi_int[obj_id][1]+1
-        lbls_fg_roi[i, sid:eid] = roi_fg[rid]['classes'][bid, :]
+        if ltype == 'SigmoidCrossEntropyLoss':
+            lbls_fg_roi[i, sid:eid] = roi_fg[rid]['classes'][bid, :]
+        if ltype == 'MultiLabelLoss':
+            lbls_raw = roi_fg[rid]['classes'][bid, :]
+            lbls_raw[lbls_raw == 0] = -1
+            lbls_fg_roi[i, sid:eid] = lbls_raw
         rois_fg_roi[i, :] = roi_fg[rid]['boxes'][bid, :]
         scrs_fg_roi[i, :] = roi_fg[rid]['scores'][bid, :]
     # background RoIs
-    lbls_bg_roi = np.zeros((bg_roi_per_this_image, num_classes), dtype='uint8')
+    lbls_bg_roi = np.zeros((bg_roi_per_this_image, num_classes), dtype='int32')
     rois_bg_roi = np.zeros((bg_roi_per_this_image, 8), dtype='uint16')
     scrs_bg_roi = np.zeros((bg_roi_per_this_image, 2), dtype='float32')
     for i, ind in enumerate(bg_roi_smp_ind):
         rid = bg_roi_inds[ind, 0]
         bid = bg_roi_inds[ind, 1]
-        obj_id = roi_fg[rid]['obj_id']
-        sid = obj_hoi_int[obj_id][0]
-        eid = obj_hoi_int[obj_id][1]+1
-        lbls_bg_roi[i, sid:eid] = roi_fg[rid]['classes'][bid, :]
+        assert np.all(roi_fg[rid]['classes'][bid, :] == 0)
+        # lbls_bg_roi[i, sid:eid] = roi_fg[rid]['classes'][bid, :]
+        if ltype == 'MultiLabelLoss':
+            obj_id = roi_fg[rid]['obj_id']
+            sid = obj_hoi_int[obj_id][0]
+            eid = obj_hoi_int[obj_id][1]+1
+            lbls_bg_roi[i, sid:eid] = -1
         rois_bg_roi[i, :] = roi_fg[rid]['boxes'][bid, :]
         scrs_bg_roi[i, :] = roi_fg[rid]['scores'][bid, :]
     # background RoIs
-    lbls_bg_obj = np.zeros((bg_obj_per_this_image, num_classes), dtype='uint8')
+    lbls_bg_obj = np.zeros((bg_obj_per_this_image, num_classes), dtype='int32')
     rois_bg_obj = np.zeros((bg_obj_per_this_image, 8), dtype='uint16')
     scrs_bg_obj = np.zeros((bg_obj_per_this_image, 2), dtype='float32')
     for i, ind in enumerate(bg_obj_smp_ind):
         rid = bg_obj_inds[ind, 0]
         bid = bg_obj_inds[ind, 1]
+        if ltype == 'MultiLabelLoss':
+            obj_id = roi_bg[rid]['obj_id']
+            sid = obj_hoi_int[obj_id][0]
+            eid = obj_hoi_int[obj_id][1]+1
+            lbls_bg_obj[i, sid:eid] = -1
         rois_bg_obj[i, :] = roi_bg[rid]['boxes'][bid, :]
         scrs_bg_obj[i, :] = roi_bg[rid]['scores'][bid, :]
     # Stack arrays

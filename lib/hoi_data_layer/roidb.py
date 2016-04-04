@@ -29,7 +29,7 @@ def prepare_roidb(imdb):
             max_overlaps = gt_overlaps.max(axis=1)
             roidb[i]['roi_fg'][j]['max_overlaps'] = max_overlaps
             # gt binary class for multi-class classification
-            classes = (gt_overlaps >= cfg.TRAIN.FG_THRESH).astype('uint8')
+            classes = (gt_overlaps >= cfg.TRAIN.FG_THRESH).astype('int32')
             roidb[i]['roi_fg'][j]['classes'] = classes
 
 # TODO: modify for multi-label

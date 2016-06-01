@@ -194,7 +194,16 @@ def _foward_im_roi(net, im, roi):
 
     blobs_out = net.forward(**(blobs))
 
-    probs = net.blobs['cls_prob'].data
+    if not cfg.TEST.SCORE_BLOB:
+        probs = net.blobs['cls_prob'].data
+    else:
+        # output scores from one stream
+        if cfg.TEST.SCORE_BLOB == 'h':
+            probs = net.blobs['cls_score_h'].data
+        if cfg.TEST.SCORE_BLOB == 'o':
+            probs = net.blobs['cls_score_o'].data
+        if cfg.TEST.SCORE_BLOB == 'sr':
+            probs = net.blobs['cls_score_sr'].data
 
     return probs
 
@@ -316,6 +325,9 @@ def test_net_hico(net, imdb, obj_id):
     all_boxes = np.empty((num_classes, num_images), dtype=object)
 
     output_dir = get_output_dir(imdb, net)
+    # output scores from one stream
+    if cfg.TEST.SCORE_BLOB:
+        output_dir = output_dir + '_' + cfg.TEST.SCORE_BLOB
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 

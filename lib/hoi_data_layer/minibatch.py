@@ -23,6 +23,8 @@ def get_minibatch(roidb, num_classes, obj_hoi_int, ltype):
     rois_per_image = cfg.TRAIN.BATCH_SIZE / num_images
     fg_obj_per_image = np.round(cfg.TRAIN.FG_OBJ_FRACTION * rois_per_image)
     fg_roi_per_image = np.round(cfg.TRAIN.FG_ROI_FRACTION * fg_obj_per_image)
+    assert(cfg.TRAIN.USE_BG_OBJ or cfg.TRAIN.FG_OBJ_FRACTION == 1.0, \
+        'FG_OBJ_FRACTION must be 1.0 if USE_BG_OBJ is false')
 
     # Initialize input image blobs, formatted for caffe
     if cfg.USE_CCL:
@@ -215,19 +217,24 @@ def _sample_rois(roidb, fg_obj_per_image, fg_roi_per_image, rois_per_image,
                                     size=bg_roi_per_this_image, replace=False)
     else:
         bg_roi_smp_ind = np.zeros((0), dtype='int')
-    # Compute number of background object RoIs to take from this image (guarding
-    # against there being fewer than desired)
-    bg_obj_per_this_image = \
-        rois_per_image - fg_roi_per_this_image - bg_roi_per_this_image
-    bg_obj_per_this_image = np.minimum(bg_obj_per_this_image,
-                                       bg_obj_inds.shape[0])
-    # Sample background object regions without replacement
-    if bg_obj_inds.shape[0] > 0:
+
+    if cfg.TRAIN.USE_BG_OBJ:
+        # Compute number of background object RoIs to take from this image
+        # (guarding against there being fewer than desired)
+        bg_obj_per_this_image = \
+            rois_per_image - fg_roi_per_this_image - bg_roi_per_this_image
+        bg_obj_per_this_image = np.minimum(bg_obj_per_this_image,
+                                           bg_obj_inds.shape[0])
+        # Sample background object regions without replacement
+        assert(bg_obj_inds.shape[0] > 0, \
+            'Empty background object regions. Not expected!')
         bg_obj_smp_ind = npr.choice(range(bg_obj_inds.shape[0]),
                                     size=bg_obj_per_this_image, replace=False)
     else:
-        # Should not reach here
-        raise Exception('Empty background object regions. Not expected!')
+        # Do not include background object RoIs
+        bg_obj_per_this_image = 0
+        bg_obj_smp_ind = npr.choice(range(bg_obj_inds.shape[0]),
+                                    size=0, replace=False)
 
     # Get sampled labels, boxes, detection scores
     # foreground RoIs

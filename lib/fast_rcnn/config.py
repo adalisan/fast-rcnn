@@ -89,6 +89,7 @@ __C.TRAIN.USE_PREFETCH = False
 # __C.TRAIN_MODE = 'default'
 __C.TRAIN.FG_OBJ_FRACTION = 0.5
 __C.TRAIN.FG_ROI_FRACTION = 0.25
+__C.TRAIN.USE_BG_OBJ = True
 
 #
 # Testing options

@@ -102,7 +102,15 @@ class HOIDataLayer(caffe.Layer):
         if cfg.USE_SPATIAL > 0:
             ind = len(self._name_to_top_map.keys())
             self._name_to_top_map['data_sr'] = ind
-            top[ind].reshape(1, 2, 64, 64)
+            if cfg.USE_SPATIAL == 1 or cfg.USE_SPATIAL == 2:
+                # Interaction Patterns
+                top[ind].reshape(1, 2, 64, 64)
+            if cfg.USE_SPATIAL == 3 or cfg.USE_SPATIAL == 4:
+                # 2D vector between box centers
+                top[ind].reshape(1, 2)
+            if cfg.USE_SPATIAL == 5 or cfg.USE_SPATIAL == 6:
+                # Concat of box locations (x, y, w, h)
+                top[ind].reshape(1, 8)
         if cfg.SHARE_O:
             ind = len(self._name_to_top_map.keys())
             self._name_to_top_map['score_o'] = ind

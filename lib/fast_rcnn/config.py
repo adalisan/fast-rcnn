@@ -33,6 +33,7 @@ __C.USE_SPATIAL = 0
 __C.SHARE_O = False
 __C.SHARE_V = False
 __C.USE_UNION = False
+__C.USE_ROIPOOLING = False
 
 #
 # Training options

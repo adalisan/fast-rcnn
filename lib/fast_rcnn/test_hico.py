@@ -21,6 +21,7 @@ import os
 
 import scipy.io as sio
 import hoi_data_layer.spatial_relation as hdl_sr
+from fast_rcnn.test import _get_image_blob, _get_rois_blob, _project_im_rois
 
 def _get_union_bbox(box1, box2):
     return np.array( \
@@ -41,6 +42,7 @@ def _enlarge_bbox_ccl(bbox, w_im, h_im):
     return bbox_en
 
 def _get_one_blob(im, bbox, w, h):
+    """Crop and resize a region for a network input"""
     # crop image
     # bbox indexes are zero-based
     im_trans = im[bbox[1]:bbox[3]+1, bbox[0]:bbox[2]+1]
@@ -132,7 +134,13 @@ def _foward_im_roi(net, im, roi):
     # if cfg.SHARE_V:
     #     # no additional blobs needed
     if cfg.USE_UNION:
-        im_blob_ho = np.zeros((num_boxes, 3, 227, 227), dtype=np.float32)
+        if cfg.USE_ROIPOOLING:
+            # ROI Pooling
+            im_blob, im_scale_factors = _get_image_blob(im)
+            rois_blob = np.zeros((num_boxes, 5), dtype=np.float32)
+        else:
+            # crop
+            im_blob_ho = np.zeros((num_boxes, 3, 227, 227), dtype=np.float32)
 
     for i in xrange(num_boxes):
         box_h = boxes[i, 0:4]
@@ -193,8 +201,14 @@ def _foward_im_roi(net, im, roi):
         #     # no additional blobs needed
         if cfg.USE_UNION:
             box_ho = _get_union_bbox(box_h, box_o)
-            blob_ho = _get_one_blob(im, box_ho, 227, 227)
-            im_blob_ho[i, :, :, :] = blob_ho[None, :]
+            if cfg.USE_ROIPOOLING:
+                # ROI Pooling
+                box_ho = box_ho[np.newaxis,:]
+                rois_blob[i, :] = _get_rois_blob(box_ho, im_scale_factors)
+            else:
+                # crop
+                blob_ho = _get_one_blob(im, box_ho, 227, 227)
+                im_blob_ho[i, :, :, :] = blob_ho[None, :]
 
     blobs = {'data_h': im_blob_h,
              'data_o': im_blob_o}
@@ -207,7 +221,10 @@ def _foward_im_roi(net, im, roi):
     # if cfg.SHARE_V:
     #     # no additional blobs needed
     if cfg.USE_UNION:
-        blobs = {'data_ho': im_blob_ho}
+        if cfg.USE_ROIPOOLING:
+            blobs = {'data': im_blob, 'rois': rois_blob}
+        else:
+            blobs = {'data_ho': im_blob_ho}
 
     # reshape network inputs
     # net.blobs['data_h'].reshape(*(blobs['data_h'].shape))

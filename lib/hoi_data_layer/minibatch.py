@@ -11,8 +11,10 @@ import numpy as np
 import numpy.random as npr
 import cv2
 from fast_rcnn.config import cfg
+from utils.blob import prep_im_for_blob, im_list_to_blob
 
 import hoi_data_layer.spatial_relation as hdl_sr
+from roi_data_layer.minibatch import _get_image_blob, _project_im_rois
 
 def get_minibatch(roidb, num_classes, obj_hoi_int, ltype):
     """Given a roidb, construct a minibatch sampled from it."""
@@ -49,9 +51,19 @@ def get_minibatch(roidb, num_classes, obj_hoi_int, ltype):
     # if cfg.SHARE_V:
     #     # no additional blobs needed
     if cfg.USE_UNION:
-        im_blob_ho = np.zeros((0, 3, 227, 227), dtype=np.float32)
+        if cfg.USE_ROIPOOLING:
+            # ROI Pooling
+            # Sample random scales to use for each image in this batch
+            random_scale_inds = npr.randint(0, high=len(cfg.TRAIN.SCALES),
+                                            size=num_images)
+            im_blob, im_scales = _get_image_blob(roidb, random_scale_inds)
+            # Build the region of interest blob
+            rois_blob = np.zeros((0, 5), dtype=np.float32)
+        else:
+            # crop
+            im_blob_ho = np.zeros((0, 3, 227, 227), dtype=np.float32)
 
-    # Now, build the region of interest and label blobs
+    # Now, build the label blob
     labels_blob = np.zeros((0, num_classes), dtype=np.float32)
     # bbox_targets_blob = np.zeros((0, 4 * num_classes), dtype=np.float32)
     # bbox_loss_blob = np.zeros(bbox_targets_blob.shape, dtype=np.float32)
@@ -132,8 +144,17 @@ def get_minibatch(roidb, num_classes, obj_hoi_int, ltype):
             #     # no additional blobs needed
             if cfg.USE_UNION:
                 box_ho = _get_union_bbox(box_h, box_o)
-                blob_ho = _get_one_blob(im, box_ho, 227, 227)
-                im_blob_ho = np.vstack((im_blob_ho, blob_ho[None, :]))
+                if cfg.USE_ROIPOOLING:
+                    # ROI Pooling
+                    box_ho = box_ho[np.newaxis,:]
+                    rois = _project_im_rois(box_ho, im_scales[im_i])
+                    batch_ind = im_i * np.ones((rois.shape[0], 1))
+                    rois_blob_this_image = np.hstack((batch_ind, rois))
+                    rois_blob = np.vstack((rois_blob, rois_blob_this_image))
+                else:
+                    # crop
+                    blob_ho = _get_one_blob(im, box_ho, 227, 227)
+                    im_blob_ho = np.vstack((im_blob_ho, blob_ho[None, :]))
 
         # Add to labels, bbox targets, and bbox loss blobs
         labels_blob = np.vstack((labels_blob, labels))
@@ -157,7 +178,10 @@ def get_minibatch(roidb, num_classes, obj_hoi_int, ltype):
     # if cfg.SHARE_V:
     #     # no additional blobs needed
     if cfg.USE_UNION:
-        blobs = {'data_ho' : im_blob_ho, 'labels' : labels_blob}
+        if cfg.USE_ROIPOOLING:
+            blobs = {'data': im_blob, 'rois': rois_blob, 'labels': labels_blob}
+        else:
+            blobs = {'data_ho': im_blob_ho, 'labels': labels_blob}
 
     # if cfg.TRAIN.BBOX_REG:
     #     blobs['bbox_targets'] = bbox_targets_blob
@@ -298,6 +322,7 @@ def _sample_rois(roidb, fg_obj_per_image, fg_roi_per_image, rois_per_image,
     return labels, rois, scores
 
 def _get_one_blob(im, bbox, w, h):
+    """Crop and resize a region for a network input"""
     # crop image
     # bbox indexes are zero-based
     im_trans = im[bbox[1]:bbox[3]+1, bbox[0]:bbox[2]+1]

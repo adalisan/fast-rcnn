@@ -101,7 +101,7 @@ class HOIDataLayer(caffe.Layer):
             top[ind].reshape(1, 3, 227, 227)
         if cfg.USE_SPATIAL > 0:
             ind = len(self._name_to_top_map.keys())
-            self._name_to_top_map['data_sr'] = ind
+            self._name_to_top_map['data_p'] = ind
             if cfg.USE_SPATIAL == 1 or cfg.USE_SPATIAL == 2:
                 # Interaction Patterns
                 top[ind].reshape(1, 2, 64, 64)

@@ -27,10 +27,10 @@ class hico_det(datasets.imdb):
         self._image_set = image_set
         self._obj_id = obj_id
         self._obj_name = obj_name
-        self._data_path = './external/hico_20160224_det/images/' + image_set
-        self._anno_file = './external/hico_20160224_det/anno.mat'
-        self._bbox_file = './external/hico_20160224_det/anno_bbox.mat'
-        self._det_path = './caches/det_base_caffenet/' + image_set
+        self._data_path = './data/hico_20160224_det/images/' + image_set
+        self._anno_file = './data/hico_20160224_det/anno.mat'
+        self._bbox_file = './data/hico_20160224_det/anno_bbox.mat'
+        self._det_path = './cache/det_base_caffenet/' + image_set
         # Load annotation
         self._load_annotation()
         # Default to roidb handler

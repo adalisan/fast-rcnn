@@ -39,13 +39,13 @@ def get_minibatch(roidb, num_classes, obj_hoi_int, ltype):
         im_blob_s = np.zeros((0, 3, 227, 227), dtype=np.float32)
     if cfg.USE_SPATIAL == 1 or cfg.USE_SPATIAL == 2:
         # Interaction Patterns
-        im_blob_sr = np.zeros((0, 2, 64, 64), dtype=np.float32)
+        im_blob_p = np.zeros((0, 2, 64, 64), dtype=np.float32)
     if cfg.USE_SPATIAL == 3 or cfg.USE_SPATIAL == 4:
         # 2D vector between box centers
-        im_blob_sr = np.zeros((0, 2), dtype=np.float32)
+        im_blob_p = np.zeros((0, 2), dtype=np.float32)
     if cfg.USE_SPATIAL == 5 or cfg.USE_SPATIAL == 6:
         # Concat of box locations (x, y, w, h)
-        im_blob_sr = np.zeros((0, 8), dtype=np.float32)
+        im_blob_p = np.zeros((0, 8), dtype=np.float32)
     if cfg.SHARE_O:
         score_o_blob = np.zeros((0, 1), dtype=np.float32)
     # if cfg.SHARE_V:
@@ -107,10 +107,10 @@ def get_minibatch(roidb, num_classes, obj_hoi_int, ltype):
             if cfg.USE_SPATIAL > 0:
                 if cfg.USE_SPATIAL == 1:
                     # do not keep aspect ratio
-                    blob_sr, _, _ = hdl_sr.get_map_no_pad(box_h, box_o, 64)
+                    blob_p, _, _ = hdl_sr.get_map_no_pad(box_h, box_o, 64)
                 if cfg.USE_SPATIAL == 2:
                     # keep aspect ratio
-                    blob_sr, _, _ = hdl_sr.get_map_pad(box_h, box_o, 64)
+                    blob_p, _, _ = hdl_sr.get_map_pad(box_h, box_o, 64)
                 if cfg.USE_SPATIAL == 3 or cfg.USE_SPATIAL == 5:
                     # do not keep aspect ratio
                     _, bxh_rs, bxo_rs = hdl_sr.get_map_no_pad(box_h, box_o, 64)
@@ -123,7 +123,7 @@ def get_minibatch(roidb, num_classes, obj_hoi_int, ltype):
                                     (bxh_rs[1] + bxh_rs[3])/2])
                     cto = np.array([(bxo_rs[0] + bxo_rs[2])/2,
                                     (bxo_rs[1] + bxo_rs[3])/2])
-                    blob_sr = cto - cth
+                    blob_p = cto - cth
                 if cfg.USE_SPATIAL == 5 or cfg.USE_SPATIAL == 6:
                     # Concat of box locations (x, y, w, h)
                     bxh = np.array([(bxh_rs[0] + bxh_rs[2])/2,
@@ -134,8 +134,8 @@ def get_minibatch(roidb, num_classes, obj_hoi_int, ltype):
                                     (bxo_rs[1] + bxo_rs[3])/2,
                                     bxo_rs[2] - bxo_rs[0],
                                     bxo_rs[3] - bxo_rs[1]])
-                    blob_sr = np.hstack((bxh, bxo))
-                im_blob_sr = np.vstack((im_blob_sr, blob_sr[None, :]))
+                    blob_p = np.hstack((bxh, bxo))
+                im_blob_p = np.vstack((im_blob_p, blob_p[None, :]))
             if cfg.SHARE_O:
                 # Use natural log of object detection scores
                 score_o = np.log(scores[i, 1])
@@ -172,7 +172,7 @@ def get_minibatch(roidb, num_classes, obj_hoi_int, ltype):
     if cfg.USE_SCENE:
         blobs['data_s'] = im_blob_s
     if cfg.USE_SPATIAL > 0:
-        blobs['data_sr'] = im_blob_sr
+        blobs['data_p'] = im_blob_p
     if cfg.SHARE_O:
         blobs['score_o'] = score_o_blob
     # if cfg.SHARE_V:

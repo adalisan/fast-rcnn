@@ -116,7 +116,7 @@ __C.TEST.SVM = False
 # Test using bounding-box regressors
 __C.TEST.BBOX_REG = True
 
-# Currently supports 'h', 'o', and 'sr'
+# Currently supports 'h', 'o', and 'p'
 __C.TEST.SCORE_BLOB = ''
 
 #

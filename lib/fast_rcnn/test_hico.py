@@ -122,13 +122,13 @@ def _foward_im_roi(net, im, roi):
         im_blob_s = np.zeros((num_boxes, 3, 227, 227), dtype=np.float32)
     if cfg.USE_SPATIAL == 1 or cfg.USE_SPATIAL == 2:
         # Interaction Patterns
-        im_blob_sr = np.zeros((num_boxes, 2, 64, 64), dtype=np.float32)
+        im_blob_p = np.zeros((num_boxes, 2, 64, 64), dtype=np.float32)
     if cfg.USE_SPATIAL == 3 or cfg.USE_SPATIAL == 4:
         # 2D vector between box centers
-        im_blob_sr = np.zeros((num_boxes, 2), dtype=np.float32)
+        im_blob_p = np.zeros((num_boxes, 2), dtype=np.float32)
     if cfg.USE_SPATIAL == 5 or cfg.USE_SPATIAL == 6:
         # Concat of box locations (x, y, w, h)
-        im_blob_sr = np.zeros((num_boxes, 8), dtype=np.float32)
+        im_blob_p = np.zeros((num_boxes, 8), dtype=np.float32)
     if cfg.SHARE_O:
         score_o_blob = np.zeros((num_boxes, 1), dtype=np.float32)
     # if cfg.SHARE_V:
@@ -164,10 +164,10 @@ def _foward_im_roi(net, im, roi):
         if cfg.USE_SPATIAL > 0:
             if cfg.USE_SPATIAL == 1:
                 # do not keep aspect ratio
-                blob_sr, _, _ = hdl_sr.get_map_no_pad(box_h, box_o, 64)
+                blob_p, _, _ = hdl_sr.get_map_no_pad(box_h, box_o, 64)
             if cfg.USE_SPATIAL == 2:
                 # keep aspect ratio
-                blob_sr, _, _ = hdl_sr.get_map_pad(box_h, box_o, 64)
+                blob_p, _, _ = hdl_sr.get_map_pad(box_h, box_o, 64)
             if cfg.USE_SPATIAL == 3 or cfg.USE_SPATIAL == 5:
                 # do not keep aspect ratio
                 _, bxh_rs, bxo_rs = hdl_sr.get_map_no_pad(box_h, box_o, 64)
@@ -180,7 +180,7 @@ def _foward_im_roi(net, im, roi):
                                 (bxh_rs[1] + bxh_rs[3])/2])
                 cto = np.array([(bxo_rs[0] + bxo_rs[2])/2,
                                 (bxo_rs[1] + bxo_rs[3])/2])
-                blob_sr = cto - cth
+                blob_p = cto - cth
             if cfg.USE_SPATIAL == 5 or cfg.USE_SPATIAL == 6:
                 # Concat of box locations (x, y, w, h)
                 bxh = np.array([(bxh_rs[0] + bxh_rs[2])/2,
@@ -191,8 +191,8 @@ def _foward_im_roi(net, im, roi):
                                 (bxo_rs[1] + bxo_rs[3])/2,
                                 bxo_rs[2] - bxo_rs[0],
                                 bxo_rs[3] - bxo_rs[1]])
-                blob_sr = np.hstack((bxh, bxo))
-            im_blob_sr[i, :] = blob_sr[None, :]
+                blob_p = np.hstack((bxh, bxo))
+            im_blob_p[i, :] = blob_p[None, :]
         if cfg.SHARE_O:
             # use natural log of object detection scores
             score_o = np.log(scores[i, 1])
@@ -215,7 +215,7 @@ def _foward_im_roi(net, im, roi):
     if cfg.USE_SCENE:
         blobs['data_s'] = im_blob_s
     if cfg.USE_SPATIAL > 0:
-        blobs['data_sr'] = im_blob_sr
+        blobs['data_p'] = im_blob_p
     if cfg.SHARE_O:
         blobs['score_o'] = score_o_blob
     # if cfg.SHARE_V:
@@ -232,7 +232,7 @@ def _foward_im_roi(net, im, roi):
     # if cfg.USE_SCENE:
     #     net.blobs['data_s'].reshape(*(blobs['data_s'].shape))
     # if cfg.USE_SPATIAL:
-    #     net.blobs['data_sr'].reshape(*(blobs['data_sr'].shape))
+    #     net.blobs['data_p'].reshape(*(blobs['data_p'].shape))
     # if cfg.SHARE_O:
     #     net.blobs['score_o'].reshape(*(blobs['score_o'].shape))
     # # if cfg.SHARE_V:
@@ -250,8 +250,8 @@ def _foward_im_roi(net, im, roi):
             probs = net.blobs['cls_score_h'].data
         if cfg.TEST.SCORE_BLOB == 'o':
             probs = net.blobs['cls_score_o'].data
-        if cfg.TEST.SCORE_BLOB == 'sr':
-            probs = net.blobs['cls_score_sr'].data
+        if cfg.TEST.SCORE_BLOB == 'p':
+            probs = net.blobs['cls_score_p'].data
 
     return probs
 

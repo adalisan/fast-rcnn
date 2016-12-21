@@ -100,8 +100,21 @@ def _foward_im_roi(net, im, roi):
     scores = roi['scores']
 
     num_boxes = boxes.shape[0]
-    im_blob_h = np.zeros((num_boxes, 3, 227, 227), dtype=np.float32)
-    im_blob_o = np.zeros((num_boxes, 3, 227, 227), dtype=np.float32)
+
+    if cfg.USE_ROIPOOLING:
+        im_blob, im_scale_factors = _get_image_blob(im)
+        if cfg.USE_UNION:
+            rois_blob = np.zeros((num_boxes, 5), dtype=np.float32)
+        else:
+            rois_h_blob = np.zeros((num_boxes, 5), dtype=np.float32)
+            rois_o_blob = np.zeros((num_boxes, 5), dtype=np.float32)
+    else:
+        if cfg.USE_UNION:
+            im_blob_ho = np.zeros((num_boxes, 3, 227, 227), dtype=np.float32)
+        else:
+            im_blob_h = np.zeros((num_boxes, 3, 227, 227), dtype=np.float32)
+            im_blob_o = np.zeros((num_boxes, 3, 227, 227), dtype=np.float32)
+
     if cfg.USE_SPATIAL == 1 or cfg.USE_SPATIAL == 2:
         # Interaction Patterns
         im_blob_p = np.zeros((num_boxes, 2, 64, 64), dtype=np.float32)
@@ -113,22 +126,30 @@ def _foward_im_roi(net, im, roi):
         im_blob_p = np.zeros((num_boxes, 8), dtype=np.float32)
     if cfg.SHARE_O:
         score_o_blob = np.zeros((num_boxes, 1), dtype=np.float32)
-    if cfg.USE_UNION:
-        if cfg.USE_ROIPOOLING:
-            # ROI Pooling
-            im_blob, im_scale_factors = _get_image_blob(im)
-            rois_blob = np.zeros((num_boxes, 5), dtype=np.float32)
-        else:
-            # crop
-            im_blob_ho = np.zeros((num_boxes, 3, 227, 227), dtype=np.float32)
 
     for i in xrange(num_boxes):
         box_h = boxes[i, 0:4]
         box_o = boxes[i, 4:8]
-        blob_h = _get_one_blob(im, box_h, 227, 227)
-        blob_o = _get_one_blob(im, box_o, 227, 227)
-        im_blob_h[i, :, :, :] = blob_h[None, :]
-        im_blob_o[i, :, :, :] = blob_o[None, :]
+        if cfg.USE_UNION:
+            box_ho = _get_union_bbox(box_h, box_o)
+            if cfg.USE_ROIPOOLING:
+                box_ho_ = box_ho[np.newaxis,:]
+                rois_blob[i, :] = _get_rois_blob(box_ho_, im_scale_factors)
+            else:
+                blob_ho = _get_one_blob(im, box_ho, 227, 227)
+                im_blob_ho[i, :, :, :] = blob_ho[None, :]
+        else:
+            if cfg.USE_ROIPOOLING:
+                box_h_ = box_h[np.newaxis,:]
+                box_o_ = box_o[np.newaxis,:]
+                rois_h_blob[i, :] = _get_rois_blob(box_h_, im_scale_factors)
+                rois_o_blob[i, :] = _get_rois_blob(box_o_, im_scale_factors)
+            else:
+                blob_h = _get_one_blob(im, box_h, 227, 227)
+                blob_o = _get_one_blob(im, box_o, 227, 227)
+                im_blob_h[i, :, :, :] = blob_h[None, :]
+                im_blob_o[i, :, :, :] = blob_o[None, :]
+
         if cfg.USE_SPATIAL > 0:
             if cfg.USE_SPATIAL == 1:
                 # do not keep aspect ratio
@@ -165,28 +186,26 @@ def _foward_im_roi(net, im, roi):
             # use natural log of object detection scores
             score_o = np.log(scores[i, 1])
             score_o_blob[i, :] = score_o
-        if cfg.USE_UNION:
-            box_ho = _get_union_bbox(box_h, box_o)
-            if cfg.USE_ROIPOOLING:
-                # ROI Pooling
-                box_ho = box_ho[np.newaxis,:]
-                rois_blob[i, :] = _get_rois_blob(box_ho, im_scale_factors)
-            else:
-                # crop
-                blob_ho = _get_one_blob(im, box_ho, 227, 227)
-                im_blob_ho[i, :, :, :] = blob_ho[None, :]
 
-    blobs = {'data_h': im_blob_h,
-             'data_o': im_blob_o}
+    if cfg.USE_UNION:
+        if cfg.USE_ROIPOOLING:
+            blobs = {'data': im_blob,
+                     'rois': rois_blob}
+        else:
+            blobs = {'data_ho': im_blob_ho}
+    else:
+        if cfg.USE_ROIPOOLING:
+            blobs = {'data': im_blob,
+                     'rois_h': rois_h_blob,
+                     'rois_o': rois_o_blob}
+        else:
+            blobs = {'data_h': im_blob_h,
+                     'data_o': im_blob_o}
+
     if cfg.USE_SPATIAL > 0:
         blobs['data_p'] = im_blob_p
     if cfg.SHARE_O:
         blobs['score_o'] = score_o_blob
-    if cfg.USE_UNION:
-        if cfg.USE_ROIPOOLING:
-            blobs = {'data': im_blob, 'rois': rois_blob}
-        else:
-            blobs = {'data_ho': im_blob_ho}
 
     # reshape network inputs
     # net.blobs['data_h'].reshape(*(blobs['data_h'].shape))
@@ -307,12 +326,19 @@ def vis_detections(im, class_name, dets, thresh=0.3):
 #             nms_boxes[cls_ind][im_ind] = dets[keep, :].copy()
 #     return nms_boxes
 
-def test_net_hico(net, imdb, obj_id):
-    """Test a Fast R-CNN network on an image database."""
+def test_net_hico(net, imdb, obj_id, num_batch):
+    """Test a network on HICO"""
+    # get dataset parameters
+    if obj_id is None:
+        num_batch = num_batch or 1
+        hoi_obj_id = imdb.get_hoi_obj_id()
+        num_classes = imdb.num_classes
+    else:
+        assert num_batch is None
+        fg_obj_id = imdb.get_fg_obj_id()
+        hoi_ind_int = imdb.get_obj_hoi_int()[obj_id]
+        num_classes = hoi_ind_int[1] - hoi_ind_int[0] + 1
     num_images = len(imdb.image_index)
-    assert obj_id is not None
-    hoi_ind_int = imdb.get_obj_hoi_int()[obj_id]
-    num_classes = hoi_ind_int[1] - hoi_ind_int[0] + 1
     # heuristic: keep an average of 40 detections per class per images prior
     # to NMS
     # max_per_set = 40 * num_images
@@ -340,35 +366,68 @@ def test_net_hico(net, imdb, obj_id):
     # timers
     _t = {'im_detect' : Timer(), 'misc' : Timer()}
 
-    fg_obj_id = imdb.get_fg_obj_id()
-
     roidb = imdb.roidb
     for i in xrange(num_images):
         # read image
         im = cv2.imread(imdb.image_path_at(i))
-        # get roi for the target object class
-        if obj_id in fg_obj_id[i]:
-            roi = [roi for roi in roidb[i]['roi_fg'] if roi['obj_id'] == obj_id]
+        if obj_id is None:
+            # concat roi and sort by obj_id
+            roi_all = roidb[i]['roi_fg'] + roidb[i]['roi_bg']
+            oid_all = np.array([roi['obj_id'] for roi in roi_all])
+            roi_all = [roi_all[oid] for oid in np.argsort(oid_all)]
+            # concat boxes and scores
+            b_stack = np.zeros((0, 8), dtype='uint16')
+            s_stack = np.zeros((0, 2), dtype='float32')
+            num_boxes = []
+            for roi in roi_all:
+                b_stack = np.vstack((b_stack, roi['boxes']))
+                s_stack = np.vstack((s_stack, roi['scores']))
+                num_boxes.append(roi['boxes'].shape[0])
+            # get csum
+            csum = np.append([0],np.cumsum(num_boxes))
+            # detect HOI classes given proposals (batch mode)
+            _t['im_detect'].tic()
+            batch_size = int(np.ceil(len(roi_all) / float(num_batch)))
+            scores = []
+            for b in xrange(num_batch):
+                sid = batch_size * b
+                eid = min(batch_size * (b+1), len(roi_all))
+                roi = {'boxes' : b_stack[csum[sid]:csum[eid], :],
+                       'scores' : s_stack[csum[sid]:csum[eid], :]}
+                scores.append(im_detect(net, im, roi).copy())
+            scores = np.vstack(scores)
+            _t['im_detect'].toc()
         else:
-            roi = [roi for roi in roidb[i]['roi_bg'] if roi['obj_id'] == obj_id]
-        assert len(roi) == 1
-        roi = roi[0]
-
-        _t['im_detect'].tic()
-        scores = im_detect(net, im, roi)
-        _t['im_detect'].toc()
+            # get roi for the target object class
+            if obj_id in fg_obj_id[i]:
+                roidb_ = roidb[i]['roi_fg']
+            else:
+                roidb_ = roidb[i]['roi_bg']
+            roi = [roi for roi in roidb_ if roi['obj_id'] == obj_id]
+            assert len(roi) == 1
+            roi = roi[0]
+            # detect HOI classes given proposals
+            _t['im_detect'].tic()
+            scores = im_detect(net, im, roi)
+            _t['im_detect'].toc()
 
         _t['misc'].tic()
-        # keep only the HOI scores of the target object classes
-        scores = scores[:, hoi_ind_int[0]:hoi_ind_int[1]+1]
         for j in xrange(0, num_classes):
+            if obj_id is None:
+                oid = hoi_obj_id[j]
+                roi = roi_all[oid-1]
+                assert roi['obj_id'] == oid
+                sid = csum[oid-1]
+                eid = csum[oid]
+                scores_ = scores[sid:eid, j]
+            else:
+                scores_ = scores[:, hoi_ind_int[0]+j]
             if 'gt_classes' in roi:
-                # remote GT
-                inds = np.where((scores[:, j] > thresh[j]) &
+                inds = np.where((scores_ > thresh[j]) &
                                 (np.all(roi['gt_classes'] == 0, axis=1)))[0]
             else:
-                inds = np.where((scores[:, j] > thresh[j]))[0]
-            cls_scores = scores[inds, j]
+                inds = np.where((scores_ > thresh[j]))[0]
+            cls_scores = scores_[inds]
             cls_boxes = roi['boxes'][inds, :]
             top_inds = np.argsort(-cls_scores)[:max_per_image]
             cls_scores = cls_scores[top_inds]
@@ -388,7 +447,10 @@ def test_net_hico(net, imdb, obj_id):
                     .astype(np.float32, copy=False)
 
             if 0:
-                class_info = imdb.classes[j+hoi_ind_int[0]]
+                if obj_id is None:
+                    class_info = imdb.classes[j]
+                else:
+                    class_info = imdb.classes[hoi_ind_int[0]+j]
                 class_name = \
                     class_info['vname_ing'][0] + ' ' + class_info['nname'][0]
                 vis_detections(im, class_name, all_boxes[j, i])
@@ -403,5 +465,9 @@ def test_net_hico(net, imdb, obj_id):
             inds = np.where(all_boxes[j, i][:, -1] > thresh[j])[0]
             all_boxes[j, i] = all_boxes[j, i][inds, :]
 
-    det_file = os.path.join(output_dir, 'detections_{:02d}.mat'.format(obj_id))
+    if obj_id is None:
+        filename = 'detections.mat'
+    else:
+        filename = 'detections_{:02d}.mat'.format(obj_id)
+    det_file = os.path.join(output_dir, filename)
     sio.savemat(det_file, {'all_boxes' : all_boxes})

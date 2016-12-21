@@ -28,9 +28,27 @@ def get_minibatch(roidb, num_classes, obj_hoi_int, ltype):
     assert(cfg.TRAIN.USE_BG_OBJ or cfg.TRAIN.FG_OBJ_FRACTION == 1.0, \
         'FG_OBJ_FRACTION must be 1.0 if USE_BG_OBJ is false')
 
-    # Initialize input image blobs, formatted for caffe
-    im_blob_h = np.zeros((0, 3, 227, 227), dtype=np.float32)
-    im_blob_o = np.zeros((0, 3, 227, 227), dtype=np.float32)
+    if cfg.USE_ROIPOOLING:
+        # Sample random scales to use for each image in this batch
+        random_scale_inds = npr.randint(0, high=len(cfg.TRAIN.SCALES),
+                                        size=num_images)
+        # Get the input image blob, formatted for caffe
+        im_blob, im_scales = _get_image_blob(roidb, random_scale_inds)
+
+        # Now, build the region of interest blob
+        if cfg.USE_UNION:
+            rois_blob = np.zeros((0, 5), dtype=np.float32)
+        else:
+            rois_h_blob = np.zeros((0, 5), dtype=np.float32)
+            rois_o_blob = np.zeros((0, 5), dtype=np.float32)
+    else:
+        # Initialize input image blobs, formatted for caffe
+        if cfg.USE_UNION:
+            im_blob_ho = np.zeros((0, 3, 227, 227), dtype=np.float32)
+        else:
+            im_blob_h = np.zeros((0, 3, 227, 227), dtype=np.float32)
+            im_blob_o = np.zeros((0, 3, 227, 227), dtype=np.float32)
+
     if cfg.USE_SPATIAL == 1 or cfg.USE_SPATIAL == 2:
         # Interaction Patterns
         im_blob_p = np.zeros((0, 2, 64, 64), dtype=np.float32)
@@ -42,18 +60,6 @@ def get_minibatch(roidb, num_classes, obj_hoi_int, ltype):
         im_blob_p = np.zeros((0, 8), dtype=np.float32)
     if cfg.SHARE_O:
         score_o_blob = np.zeros((0, 1), dtype=np.float32)
-    if cfg.USE_UNION:
-        if cfg.USE_ROIPOOLING:
-            # ROI Pooling
-            # Sample random scales to use for each image in this batch
-            random_scale_inds = npr.randint(0, high=len(cfg.TRAIN.SCALES),
-                                            size=num_images)
-            im_blob, im_scales = _get_image_blob(roidb, random_scale_inds)
-            # Build the region of interest blob
-            rois_blob = np.zeros((0, 5), dtype=np.float32)
-        else:
-            # crop
-            im_blob_ho = np.zeros((0, 3, 227, 227), dtype=np.float32)
 
     # Now, build the label blob
     labels_blob = np.zeros((0, num_classes), dtype=np.float32)
@@ -80,10 +86,34 @@ def get_minibatch(roidb, num_classes, obj_hoi_int, ltype):
         for i in xrange(labels.shape[0]):
             box_h = im_rois[i, 0:4]
             box_o = im_rois[i, 4:8]
-            blob_h = _get_one_blob(im, box_h, 227, 227)
-            blob_o = _get_one_blob(im, box_o, 227, 227)
-            im_blob_h = np.vstack((im_blob_h, blob_h[None, :]))
-            im_blob_o = np.vstack((im_blob_o, blob_o[None, :]))
+            if cfg.USE_UNION:
+                box_ho = _get_union_bbox(box_h, box_o)
+                if cfg.USE_ROIPOOLING:
+                    box_ho_ = box_ho[np.newaxis,:]
+                    rois = _project_im_rois(box_ho_, im_scales[im_i])
+                    batch_ind = im_i * np.ones((1, 1))
+                    rois_blob_this_im = np.hstack((batch_ind, rois))
+                    rois_blob = np.vstack((rois_blob, rois_blob_this_im))
+                else:
+                    blob_ho = _get_one_blob(im, box_ho, 227, 227)
+                    im_blob_ho = np.vstack((im_blob_ho, blob_ho[None, :]))
+            else:
+                if cfg.USE_ROIPOOLING:
+                    box_h_ = box_h[np.newaxis,:]
+                    box_o_ = box_o[np.newaxis,:]
+                    rois_h = _project_im_rois(box_h_, im_scales[im_i])
+                    rois_o = _project_im_rois(box_o_, im_scales[im_i])
+                    batch_ind = im_i * np.ones((1, 1))
+                    rois_h_blob_this_im = np.hstack((batch_ind, rois_h))
+                    rois_o_blob_this_im = np.hstack((batch_ind, rois_o))
+                    rois_h_blob = np.vstack((rois_h_blob, rois_h_blob_this_im))
+                    rois_o_blob = np.vstack((rois_o_blob, rois_o_blob_this_im))
+                else:
+                    blob_h = _get_one_blob(im, box_h, 227, 227)
+                    blob_o = _get_one_blob(im, box_o, 227, 227)
+                    im_blob_h = np.vstack((im_blob_h, blob_h[None, :]))
+                    im_blob_o = np.vstack((im_blob_o, blob_o[None, :]))
+
             if cfg.USE_SPATIAL > 0:
                 if cfg.USE_SPATIAL == 1:
                     # do not keep aspect ratio
@@ -120,19 +150,6 @@ def get_minibatch(roidb, num_classes, obj_hoi_int, ltype):
                 # Use natural log of object detection scores
                 score_o = np.log(scores[i, 1])
                 score_o_blob = np.vstack((score_o_blob, score_o))
-            if cfg.USE_UNION:
-                box_ho = _get_union_bbox(box_h, box_o)
-                if cfg.USE_ROIPOOLING:
-                    # ROI Pooling
-                    box_ho = box_ho[np.newaxis,:]
-                    rois = _project_im_rois(box_ho, im_scales[im_i])
-                    batch_ind = im_i * np.ones((rois.shape[0], 1))
-                    rois_blob_this_image = np.hstack((batch_ind, rois))
-                    rois_blob = np.vstack((rois_blob, rois_blob_this_image))
-                else:
-                    # crop
-                    blob_ho = _get_one_blob(im, box_ho, 227, 227)
-                    im_blob_ho = np.vstack((im_blob_ho, blob_ho[None, :]))
 
         # Add to labels, bbox targets, and bbox loss blobs
         labels_blob = np.vstack((labels_blob, labels))
@@ -143,19 +160,27 @@ def get_minibatch(roidb, num_classes, obj_hoi_int, ltype):
     # For debug visualizations
     # _vis_minibatch(im_blob, rois_blob, labels_blob, all_overlaps)
 
-    blobs = {'data_h': im_blob_h,
-             'data_o': im_blob_o,
-             'labels': labels_blob}
+    if cfg.USE_UNION:
+        if cfg.USE_ROIPOOLING:
+            blobs = {'data': im_blob,
+                     'rois': rois_blob}
+        else:
+            blobs = {'data_ho': im_blob_ho}
+    else:
+        if cfg.USE_ROIPOOLING:
+            blobs = {'data': im_blob,
+                     'rois_h': rois_h_blob,
+                     'rois_o': rois_o_blob}
+        else:
+            blobs = {'data_h': im_blob_h,
+                     'data_o': im_blob_o}
 
     if cfg.USE_SPATIAL > 0:
         blobs['data_p'] = im_blob_p
     if cfg.SHARE_O:
         blobs['score_o'] = score_o_blob
-    if cfg.USE_UNION:
-        if cfg.USE_ROIPOOLING:
-            blobs = {'data': im_blob, 'rois': rois_blob, 'labels': labels_blob}
-        else:
-            blobs = {'data_ho': im_blob_ho, 'labels': labels_blob}
+
+    blobs['labels'] = labels_blob
 
     # if cfg.TRAIN.BBOX_REG:
     #     blobs['bbox_targets'] = bbox_targets_blob

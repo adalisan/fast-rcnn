@@ -83,13 +83,39 @@ class HOIDataLayer(caffe.Layer):
 
         self._num_classes = layer_params['num_classes']
 
-        self._name_to_top_map = {
-            'data_h': 0,
-            'data_o': 1}
+        if cfg.USE_UNION:
+            if cfg.USE_ROIPOOLING:
+                self._name_to_top_map = {
+                    'data': 0,
+                    'rois': 1}
+            else:
+                self._name_to_top_map = {
+                    'data_ho': 0}
+        else:
+            if cfg.USE_ROIPOOLING:
+                self._name_to_top_map = {
+                    'data': 0,
+                    'rois_h': 1,
+                    'rois_o': 2}
+            else:
+                self._name_to_top_map = {
+                    'data_h': 0,
+                    'data_o': 1}
 
-        # data blob: holds a batch of N images, each with 3 channels
-        top[0].reshape(1, 3, 227, 227)
-        top[1].reshape(1, 3, 227, 227)
+        if cfg.USE_ROIPOOLING:
+            # data blob: holds a batch of N images, each with 3 channels
+            # The height and width (100 x 100) are dummy values
+            top[0].reshape(1, 3, 100, 100)
+
+            # rois blob: holds R regions of interest, each is a 5-tuple
+            # (n, x1, y1, x2, y2) specifying an image batch index n and a
+            # rectangle (x1, y1, x2, y2)
+            for i in xrange(1,len(self._name_to_top_map)):
+                top[i].reshape(1, 5)
+        else:
+            # data blob: holds a batch of N images, each with 3 channels
+            for i in xrange(len(self._name_to_top_map)):
+                top[i].reshape(1, 3, 227, 227)
 
         if cfg.USE_SPATIAL > 0:
             ind = len(self._name_to_top_map.keys())
@@ -107,15 +133,6 @@ class HOIDataLayer(caffe.Layer):
             ind = len(self._name_to_top_map.keys())
             self._name_to_top_map['score_o'] = ind
             top[ind].reshape(1, 1)
-        if cfg.USE_UNION:
-            assert not cfg.USE_SPATIAL
-            assert not cfg.SHARE_O
-            if cfg.USE_ROIPOOLING:
-                # ROI Pooling
-                self._name_to_top_map = {'data': 0, 'rois': 1}
-            else:
-                # crop
-                self._name_to_top_map = {'data_ho': 0}
 
         # labels blob: R categorical binary labels in [0, ..., K-1]
         ind = len(self._name_to_top_map.keys())

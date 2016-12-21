@@ -49,6 +49,8 @@ def parse_args():
                         nargs=argparse.REMAINDER)
     parser.add_argument('--oid', dest='obj_id',
                         help='object id', default=None, type=int)
+    parser.add_argument('--nbatch', dest='num_batch',
+                        help='number of batches', default=None, type=int)
 
     if len(sys.argv) == 1:
         parser.print_help()
@@ -86,4 +88,4 @@ if __name__ == '__main__':
     if type(imdb) is datasets.pascal_voc:
         test_net(net, imdb)
     if type(imdb) is datasets.hico_det:
-        test_net_hico(net, imdb, args.obj_id)
+        test_net_hico(net, imdb, args.obj_id, args.num_batch)

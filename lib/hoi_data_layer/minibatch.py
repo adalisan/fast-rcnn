@@ -29,14 +29,8 @@ def get_minibatch(roidb, num_classes, obj_hoi_int, ltype):
         'FG_OBJ_FRACTION must be 1.0 if USE_BG_OBJ is false')
 
     # Initialize input image blobs, formatted for caffe
-    if cfg.USE_CCL:
-        im_blob_h = np.zeros((0, 3, 419, 419), dtype=np.float32)
-        im_blob_o = np.zeros((0, 3, 419, 419), dtype=np.float32)
-    else:
-        im_blob_h = np.zeros((0, 3, 227, 227), dtype=np.float32)
-        im_blob_o = np.zeros((0, 3, 227, 227), dtype=np.float32)
-    if cfg.USE_SCENE:
-        im_blob_s = np.zeros((0, 3, 227, 227), dtype=np.float32)
+    im_blob_h = np.zeros((0, 3, 227, 227), dtype=np.float32)
+    im_blob_o = np.zeros((0, 3, 227, 227), dtype=np.float32)
     if cfg.USE_SPATIAL == 1 or cfg.USE_SPATIAL == 2:
         # Interaction Patterns
         im_blob_p = np.zeros((0, 2, 64, 64), dtype=np.float32)
@@ -48,8 +42,6 @@ def get_minibatch(roidb, num_classes, obj_hoi_int, ltype):
         im_blob_p = np.zeros((0, 8), dtype=np.float32)
     if cfg.SHARE_O:
         score_o_blob = np.zeros((0, 1), dtype=np.float32)
-    # if cfg.SHARE_V:
-    #     # no additional blobs needed
     if cfg.USE_UNION:
         if cfg.USE_ROIPOOLING:
             # ROI Pooling
@@ -88,22 +80,10 @@ def get_minibatch(roidb, num_classes, obj_hoi_int, ltype):
         for i in xrange(labels.shape[0]):
             box_h = im_rois[i, 0:4]
             box_o = im_rois[i, 4:8]
-            if cfg.USE_CCL:
-                box_h = _enlarge_bbox_ccl(box_h.astype(np.float), w_im, h_im)
-                box_o = _enlarge_bbox_ccl(box_o.astype(np.float), w_im, h_im)
-                box_h = np.around(box_h).astype(np.uint16)
-                box_o = np.around(box_o).astype(np.uint16)
-                blob_h = _get_one_blob(im, box_h, 419, 419)
-                blob_o = _get_one_blob(im, box_o, 419, 419)
-            else:
-                blob_h = _get_one_blob(im, box_h, 227, 227)
-                blob_o = _get_one_blob(im, box_o, 227, 227)
+            blob_h = _get_one_blob(im, box_h, 227, 227)
+            blob_o = _get_one_blob(im, box_o, 227, 227)
             im_blob_h = np.vstack((im_blob_h, blob_h[None, :]))
             im_blob_o = np.vstack((im_blob_o, blob_o[None, :]))
-            if cfg.USE_SCENE:
-                box_s = np.array((0, 0, w_im-1, h_im-1), dtype='uint16')
-                blob_s = _get_one_blob(im, box_s, 227, 227)
-                im_blob_s = np.vstack((im_blob_s, blob_s[None, :]))
             if cfg.USE_SPATIAL > 0:
                 if cfg.USE_SPATIAL == 1:
                     # do not keep aspect ratio
@@ -140,8 +120,6 @@ def get_minibatch(roidb, num_classes, obj_hoi_int, ltype):
                 # Use natural log of object detection scores
                 score_o = np.log(scores[i, 1])
                 score_o_blob = np.vstack((score_o_blob, score_o))
-            # if cfg.SHARE_V:
-            #     # no additional blobs needed
             if cfg.USE_UNION:
                 box_ho = _get_union_bbox(box_h, box_o)
                 if cfg.USE_ROIPOOLING:
@@ -169,14 +147,10 @@ def get_minibatch(roidb, num_classes, obj_hoi_int, ltype):
              'data_o': im_blob_o,
              'labels': labels_blob}
 
-    if cfg.USE_SCENE:
-        blobs['data_s'] = im_blob_s
     if cfg.USE_SPATIAL > 0:
         blobs['data_p'] = im_blob_p
     if cfg.SHARE_O:
         blobs['score_o'] = score_o_blob
-    # if cfg.SHARE_V:
-    #     # no additional blobs needed
     if cfg.USE_UNION:
         if cfg.USE_ROIPOOLING:
             blobs = {'data': im_blob, 'rois': rois_blob, 'labels': labels_blob}
@@ -335,18 +309,6 @@ def _get_one_blob(im, bbox, w, h):
     channel_swap = (2, 0, 1)
     im_trans = im_trans.transpose(channel_swap)
     return im_trans
-
-def _enlarge_bbox_ccl(bbox, w_im, h_im):
-    # get radius
-    w = bbox[2] - bbox[0] + 1;
-    h = bbox[3] - bbox[1] + 1;
-    r = (w + h) / 2
-    # get enlarged bbox
-    bbox_en = np.array([np.maximum(bbox[0] - 0.5 * r, 0),
-                        np.maximum(bbox[1] - 0.5 * r, 0),
-                        np.minimum(bbox[2] + 0.5 * r, w_im - 1),
-                        np.minimum(bbox[3] + 0.5 * r, h_im - 1)])
-    return bbox_en
 
 def _get_union_bbox(box1, box2):
     return np.array( \

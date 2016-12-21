@@ -29,18 +29,6 @@ def _get_union_bbox(box1, box2):
          np.maximum(box1[2], box2[2]), np.maximum(box1[3], box2[3])),
         dtype=np.uint16)
 
-def _enlarge_bbox_ccl(bbox, w_im, h_im):
-    # get radius
-    w = bbox[2] - bbox[0] + 1;
-    h = bbox[3] - bbox[1] + 1;
-    r = (w + h) / 2
-    # get enlarged bbox
-    bbox_en = np.array([np.maximum(bbox[0] - 0.5 * r, 0),
-                        np.maximum(bbox[1] - 0.5 * r, 0),
-                        np.minimum(bbox[2] + 0.5 * r, w_im - 1),
-                        np.minimum(bbox[3] + 0.5 * r, h_im - 1)])
-    return bbox_en
-
 def _get_one_blob(im, bbox, w, h):
     """Crop and resize a region for a network input"""
     # crop image
@@ -112,14 +100,8 @@ def _foward_im_roi(net, im, roi):
     scores = roi['scores']
 
     num_boxes = boxes.shape[0]
-    if cfg.USE_CCL:
-        im_blob_h = np.zeros((num_boxes, 3, 419, 419), dtype=np.float32)
-        im_blob_o = np.zeros((num_boxes, 3, 419, 419), dtype=np.float32)
-    else:
-        im_blob_h = np.zeros((num_boxes, 3, 227, 227), dtype=np.float32)
-        im_blob_o = np.zeros((num_boxes, 3, 227, 227), dtype=np.float32)
-    if cfg.USE_SCENE:
-        im_blob_s = np.zeros((num_boxes, 3, 227, 227), dtype=np.float32)
+    im_blob_h = np.zeros((num_boxes, 3, 227, 227), dtype=np.float32)
+    im_blob_o = np.zeros((num_boxes, 3, 227, 227), dtype=np.float32)
     if cfg.USE_SPATIAL == 1 or cfg.USE_SPATIAL == 2:
         # Interaction Patterns
         im_blob_p = np.zeros((num_boxes, 2, 64, 64), dtype=np.float32)
@@ -131,8 +113,6 @@ def _foward_im_roi(net, im, roi):
         im_blob_p = np.zeros((num_boxes, 8), dtype=np.float32)
     if cfg.SHARE_O:
         score_o_blob = np.zeros((num_boxes, 1), dtype=np.float32)
-    # if cfg.SHARE_V:
-    #     # no additional blobs needed
     if cfg.USE_UNION:
         if cfg.USE_ROIPOOLING:
             # ROI Pooling
@@ -145,22 +125,10 @@ def _foward_im_roi(net, im, roi):
     for i in xrange(num_boxes):
         box_h = boxes[i, 0:4]
         box_o = boxes[i, 4:8]
-        if cfg.USE_CCL:
-            box_h = _enlarge_bbox_ccl(box_h.astype(np.float), w_im, h_im)
-            box_o = _enlarge_bbox_ccl(box_o.astype(np.float), w_im, h_im)
-            box_h = np.around(box_h).astype(np.uint16)
-            box_o = np.around(box_o).astype(np.uint16)
-            blob_h = _get_one_blob(im, box_h, 419, 419)
-            blob_o = _get_one_blob(im, box_o, 419, 419)
-        else:
-            blob_h = _get_one_blob(im, box_h, 227, 227)
-            blob_o = _get_one_blob(im, box_o, 227, 227)
+        blob_h = _get_one_blob(im, box_h, 227, 227)
+        blob_o = _get_one_blob(im, box_o, 227, 227)
         im_blob_h[i, :, :, :] = blob_h[None, :]
         im_blob_o[i, :, :, :] = blob_o[None, :]
-        if cfg.USE_SCENE:
-            box_s = np.array((0, 0, w_im-1, h_im-1), dtype='uint16')
-            blob_s = _get_one_blob(im, box_s, 227, 227)
-            im_blob_s[i, :, :, :] = blob_s[None, :]
         if cfg.USE_SPATIAL > 0:
             if cfg.USE_SPATIAL == 1:
                 # do not keep aspect ratio
@@ -197,8 +165,6 @@ def _foward_im_roi(net, im, roi):
             # use natural log of object detection scores
             score_o = np.log(scores[i, 1])
             score_o_blob[i, :] = score_o
-        # if cfg.SHARE_V:
-        #     # no additional blobs needed
         if cfg.USE_UNION:
             box_ho = _get_union_bbox(box_h, box_o)
             if cfg.USE_ROIPOOLING:
@@ -212,14 +178,10 @@ def _foward_im_roi(net, im, roi):
 
     blobs = {'data_h': im_blob_h,
              'data_o': im_blob_o}
-    if cfg.USE_SCENE:
-        blobs['data_s'] = im_blob_s
     if cfg.USE_SPATIAL > 0:
         blobs['data_p'] = im_blob_p
     if cfg.SHARE_O:
         blobs['score_o'] = score_o_blob
-    # if cfg.SHARE_V:
-    #     # no additional blobs needed
     if cfg.USE_UNION:
         if cfg.USE_ROIPOOLING:
             blobs = {'data': im_blob, 'rois': rois_blob}
@@ -229,14 +191,10 @@ def _foward_im_roi(net, im, roi):
     # reshape network inputs
     # net.blobs['data_h'].reshape(*(blobs['data_h'].shape))
     # net.blobs['data_o'].reshape(*(blobs['data_o'].shape))
-    # if cfg.USE_SCENE:
-    #     net.blobs['data_s'].reshape(*(blobs['data_s'].shape))
     # if cfg.USE_SPATIAL:
     #     net.blobs['data_p'].reshape(*(blobs['data_p'].shape))
     # if cfg.SHARE_O:
     #     net.blobs['score_o'].reshape(*(blobs['score_o'].shape))
-    # # if cfg.SHARE_V:
-    # #     # no additional blobs needed
     for key in blobs:
         net.blobs[key].reshape(*(blobs[key].shape))
 

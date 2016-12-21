@@ -88,17 +88,9 @@ class HOIDataLayer(caffe.Layer):
             'data_o': 1}
 
         # data blob: holds a batch of N images, each with 3 channels
-        if cfg.USE_CCL:
-            top[0].reshape(1, 3, 419, 419)
-            top[1].reshape(1, 3, 419, 419)
-        else:
-            top[0].reshape(1, 3, 227, 227)
-            top[1].reshape(1, 3, 227, 227)
+        top[0].reshape(1, 3, 227, 227)
+        top[1].reshape(1, 3, 227, 227)
 
-        if cfg.USE_SCENE:
-            ind = len(self._name_to_top_map.keys())
-            self._name_to_top_map['data_s'] = ind
-            top[ind].reshape(1, 3, 227, 227)
         if cfg.USE_SPATIAL > 0:
             ind = len(self._name_to_top_map.keys())
             self._name_to_top_map['data_p'] = ind
@@ -115,13 +107,9 @@ class HOIDataLayer(caffe.Layer):
             ind = len(self._name_to_top_map.keys())
             self._name_to_top_map['score_o'] = ind
             top[ind].reshape(1, 1)
-        # if cfg.SHARE_V:
-        #     # no additional inputs needed
         if cfg.USE_UNION:
-            assert not cfg.USE_SCENE
             assert not cfg.USE_SPATIAL
             assert not cfg.SHARE_O
-            assert not cfg.SHARE_V
             if cfg.USE_ROIPOOLING:
                 # ROI Pooling
                 self._name_to_top_map = {'data': 0, 'rois': 1}
